@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>微笑樂園：最後一場表演</title>
+  <link rel="stylesheet" href="/src/style.css" />
+</head>
+<body>
+  <canvas id="game"></canvas>
+
+  <div id="hud" class="hidden">
+    <div id="crosshair"></div>
+    <div id="objective"></div>
+    <div id="inventory"></div>
+    <div id="prompt"></div>
+    <div id="subtitle"></div>
+    <div id="hint"></div>
+    <div id="meters">
+      <div class="meter"><span>手電筒</span><div class="bar"><i id="battery"></i></div></div>
+      <div class="meter" id="staminaWrap"><span>體力</span><div class="bar"><i id="stamina"></i></div></div>
+    </div>
+    <div id="claws"><i id="clawL"></i><i id="clawR"></i></div>
+  </div>
+
+  <div id="mapOverlay" class="hidden"><canvas id="mapCanvas"></canvas><p>[M] 收起地圖</p></div>
+
+  <div id="fade"></div>
+
+  <div id="title" class="screen">
+    <div class="vhs-tag">PLAY ▶ &nbsp; 1996.08.31 &nbsp; 23:58</div>
+    <h1>微笑樂園</h1>
+    <h2>最後一場表演</h2>
+    <p class="warn">本遊戲含有驚嚇畫面、閃光與令人不安的內容。<br />建議戴上耳機、在黑暗中遊玩。</p>
+    <button id="startBtn" disabled>載入中…</button>
+    <div id="loadbar"><i></i></div>
+    <div class="controls">
+      WASD 移動 · Shift 奔跑 · C 蹲下 · F 手電筒 · E 互動 · M 地圖<br />
+      滑鼠左鍵 / 右鍵：發射左爪 / 右爪 · Esc 暫停
+    </div>
+  </div>
+
+  <div id="pause" class="screen hidden">
+    <h2>暫停</h2>
+    <p>點擊畫面繼續</p>
+    <label class="vol">音量 <input id="volume" type="range" min="0" max="1" step="0.05" value="0.8" /></label>
+    <label class="vol">畫質 <select id="quality"><option value="low">低（較順）</option><option value="mid">中</option><option value="high">高</option></select></label>
+    <label class="vol">滑鼠靈敏度 <input id="sens" type="range" min="0.3" max="2.5" step="0.1" value="1" /></label>
+  </div>
+
+  <div id="dead" class="screen hidden">
+    <h2 class="red">你被抓住了</h2>
+    <p id="deadMsg"></p>
+    <button id="retryBtn">從檢查點重來</button>
+  </div>
+
+  <div id="ending" class="screen hidden">
+    <h2>第一章　完</h2>
+    <p id="endText"></p>
+    <p class="small">TO BE CONTINUED…</p>
+    <button id="againBtn">重新開始</button>
+  </div>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
