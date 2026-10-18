@@ -39,4 +39,5 @@ blender -b --factory-startup --python blender/game_export.py -- props
 - `blender/lib.py`：建模工具與程序化材質
 - `blender/creature_*.py`：四隻生物
 - `blender/props.py`：樂園道具
+- `blender/source/ClawPack.blend`：玩家的抓抓爪（手工建模），用 `blender -b --factory-startup --python blender/export_user_clawpack.py` 匯出成 `clawpack_full.glb`（入口撿到的背包）與 `clawhands.glb`（第一人稱的藍爪／紅爪，爪指可動）
 - `src/`：遊戲程式（關卡 `level.js`、劇情與謎題 `game.js`、怪物 AI `monsters.js`）

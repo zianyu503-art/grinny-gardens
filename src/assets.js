@@ -7,9 +7,10 @@ const MODELS = [
   'booth', 'arch', 'carousel', 'lamp', 'bench', 'fence', 'trash', 'crate', 'balloon_cart', 'popcorn',
   'fuse', 'fusebox', 'battery', 'cassette', 'keycard', 'generator', 'receiver', 'lever', 'gate_handle',
   'coaster_gate', 'coaster_track', 'coaster_support', 'coaster_car', 'ferris', 'funhouse', 'staff_door',
-  'jackbox', 'deadtree', 'plush_pile', 'clawpack', 'bridge',
+  'jackbox', 'deadtree', 'plush_pile', 'bridge',
   'circus_tent', 'bumper_arena', 'bumper_car', 'teacups', 'cotton_candy', 'striker', 'billboard', 'signpost',
   'mapboard', 'trashbags', 'turnstile', 'circus_wagon', 'stall_tent', 'coaster_hill',
+  'clawpack_full', 'clawhands',
 ];
 
 const cache = {};
@@ -41,15 +42,22 @@ function prepare(root) {
     o.castShadow = true;
     o.receiveShadow = true;
     const g = o.geometry;
+    // models authored with real PBR materials (no baked "Surf" colour) keep them untouched
+    if (!g.attributes.color && !g.attributes.surf) {
+      const m = o.material;
+      if (!m.userData.weathered) {
+        // studio-clean product materials: tone down to sit in the grimy, flashlight-lit park
+        m.userData.weathered = true;
+        m.color.multiplyScalar(m.metalness > 0.6 ? 0.4 : 0.5);
+        m.roughness = Math.min(1, m.roughness + 0.3);
+        m.metalness *= 0.75;
+      }
+      if (m.map) m.map.anisotropy = 4;
+      return;
+    }
     if (g.attributes.color && !g.attributes.surf) {
       g.setAttribute('surf', g.attributes.color);
       g.deleteAttribute('color');
-    }
-    if (!g.attributes.surf) {
-      const n = g.attributes.position.count;
-      const a = new Uint8Array(n * 4).fill(0);
-      for (let i = 0; i < n; i++) { a[i * 4] = 200; a[i * 4 + 3] = 255; }
-      g.setAttribute('surf', new THREE.BufferAttribute(a, 4, true));
     }
     if (o.material.map) o.material.map.anisotropy = 4;
     upgradeMaterial(o.material);
@@ -78,7 +86,7 @@ export function spawn(name, { uniqueMaterials = false } = {}) {
       if (o.isMesh) {
         const src = o.material;
         o.material = src.clone();
-        upgradeMaterial(o.material);
+        if (o.geometry.attributes.surf) upgradeMaterial(o.material);
       }
     });
   }

@@ -246,7 +246,7 @@ export class Level {
     this.add('booth', -6, 51, { collide: [2.6, 2.4] });
     this.light(-6, 2.6, 49.5, { color: 0xff9050, intensity: 3, distance: 6, flicker: 0.6 });
     const crate = this.add('crate', -3.4, 49.6, { collide: [1, 1] });
-    const pack = (this.items.packPickup = this.add('clawpack', -3.4, 49.6, { y: 1.05, rot: 0.6 }));
+    const pack = (this.items.packPickup = this.add('clawpack_full', -3.4, 49.75, { y: 0.95, rot: 0.25, scale: 0.19 }));
     this.items.posterBooth = this.decal(T.poster('微笑樂園', '每個孩子\n都會笑著回家'), -6, 1.8, 52.25, 1.0, 1.5, 0);
 
     const gen = (this.items.gen1 = this.add('generator', 8, 47, { collide: [1.5, 1.1], rot: -0.4 }));

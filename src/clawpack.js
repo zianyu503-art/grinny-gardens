@@ -3,40 +3,73 @@ import { spawn } from './assets.js';
 import { audio } from './audio.js';
 
 const RANGE = 20, SPEED = 42;
+const HAND_SCALE = 0.15;               // source model is ~1.5 units tall -> ~17 cm on screen
+const DOWN_TO_FORWARD = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI / 2);
+const FWD = new THREE.Vector3(0, 0, -1);
+const UP = new THREE.Vector3(0, 1, 0);
 
-/** Two launchable claws worn on the forearms (GrabPack-style). */
+/**
+ * Two launchable claw hands (the player's own ClawPack.blend model, GrabPack-style).
+ * The blue hand sits lower-left on screen (left mouse), the red one lower-right (right mouse).
+ */
 export class ClawPack {
   constructor(camera, game) {
     this.camera = camera;
     this.game = game;
     this.enabled = false;
-    const vm = (this.view = spawn('clawpack'));
-    vm.rotation.y = Math.PI; // model faces +Z, the camera looks down -Z
-    vm.position.set(0, -0.3, -0.36);
-    vm.scale.setScalar(0.5);
-    vm.visible = false;
-    vm.traverse((o) => { if (o.isMesh) { o.castShadow = false; o.renderOrder = 10; } });
-    camera.add(vm);
+    this.view = new THREE.Group();
+    this.view.visible = false;
+    camera.add(this.view);
     this.ray = new THREE.Raycaster();
     this.ray.far = RANGE;
-    // after the 180° turn the model's right part sits on screen-left
-    this.hands = [this.makeHand('HeadR', 0x2a7aff), this.makeHand('HeadL', 0xff3a2a)];
+    const src = spawn('clawhands');
+    this.hands = [
+      this.makeHand(src, 'L', new THREE.Vector3(-0.21, -0.19, -0.4), 0x5ab8ff),
+      this.makeHand(src, 'R', new THREE.Vector3(0.21, -0.19, -0.4), 0xff6a4a),
+    ];
   }
 
-  makeHand(partName, color) {
-    const head = this.view.getObjectByName(partName);
-    const rest = head.position.clone();
-    const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints([rest, rest]),
-      new THREE.LineBasicMaterial({ color: 0x222222 }));
-    line.frustumCulled = false;
-    this.view.add(line);
-    const glow = new THREE.Mesh(new THREE.SphereGeometry(0.03, 10, 8), new THREE.MeshBasicMaterial({ color: 0x5ab8ff }));
-    glow.visible = false;
+  makeHand(src, side, rest, glowColor) {
+    const head = new THREE.Group();
+    const body = src.getObjectByName('Hand' + side).clone();
+    const origin = body.position.clone();
+    body.position.set(0, 0, 0);
+    head.add(body);
+    // each finger pivots on its top hinge; opening swings it outward from the hand's axis
+    const jaws = [];
+    for (let k = 0; k < 3; k++) {
+      const j = src.getObjectByName(`Jaw${side}${k}`);
+      if (!j) continue;
+      const pivot = new THREE.Group();
+      pivot.position.copy(j.position).sub(origin);
+      const mesh = j.clone();
+      mesh.position.set(0, 0, 0);
+      pivot.add(mesh);
+      const radial = new THREE.Vector3(pivot.position.x, 0, pivot.position.z).normalize();
+      pivot.userData.axis = new THREE.Vector3().crossVectors(radial, UP).normalize();
+      head.add(pivot);
+      jaws.push(pivot);
+    }
+    head.scale.setScalar(HAND_SCALE);
+    head.quaternion.copy(DOWN_TO_FORWARD);
+    head.position.copy(rest);
+    head.traverse((o) => { if (o.isMesh) { o.castShadow = false; o.receiveShadow = false; o.renderOrder = 10; } });
+    this.view.add(head);
+
+    // rubber cable from behind the shoulder to the back of the hand
+    const cable = new THREE.Mesh(new THREE.CylinderGeometry(0.007, 0.007, 1, 6, 1, true).translate(0, 0.5, 0),
+      new THREE.MeshStandardMaterial({ color: 0x0b0c0d, roughness: 0.55, metalness: 0.1 }));
+    cable.frustumCulled = false;
+    this.view.add(cable);
+    const anchor = new THREE.Vector3(rest.x * 1.6, -0.42, 0.15);
+
+    const glow = new THREE.PointLight(glowColor, 0, 1.6, 2);
+    glow.position.set(0, -0.6, 0);
     head.add(glow);
-    const light = new THREE.PointLight(0x5ab8ff, 0, 2.5, 2);
-    head.add(light);
-    return { head, rest, line, glow, light, state: 'idle', t: 0, target: new THREE.Vector3(), hit: null, carry: null,
-      charged: 0, hum: null };
+    // at rest the claw leans in toward the crosshair and up, so its side and fingers read on screen
+    const restDir = new THREE.Vector3(-rest.x * 2.2, 0.75, -1).normalize();
+    return { head, rest, restDir, jaws, cable, anchor, glow, state: 'idle', t: 0, open: 0.15, target: new THREE.Vector3(),
+      hit: null, carry: null, charged: 0, hum: null, kick: 0, dir: restDir.clone() };
   }
 
   show(on) { this.enabled = on; this.view.visible = on; }
@@ -73,6 +106,7 @@ export class ClawPack {
     h.hit = a;
     h.state = 'out'; h.t = 0;
     h.dist = a ? a.distance : RANGE;
+    h.kick = 1;
     audio.clawFire();
   }
 
@@ -89,46 +123,61 @@ export class ClawPack {
   }
 
   update(dt) {
+    const now = performance.now() / 1000;
     for (let i = 0; i < 2; i++) {
       const h = this.hands[i];
       if (h.charged > 0) {
         h.charged -= dt;
         if (h.charged <= 0) this.discharge(i);
       }
-      const on = h.charged > 0;
-      h.glow.visible = on;
-      h.light.intensity = on ? 1.2 + Math.random() * 0.6 : 0;
+      h.glow.intensity = h.charged > 0 ? 1.4 + Math.random() * 0.8 : 0;
 
-      const worldTarget = this.view.worldToLocal(h.target.clone());
+      const local = this.view.worldToLocal(h.target.clone());
+      let wantOpen = 0.12 + Math.sin(now * 1.3 + i) * 0.03;
       if (h.state === 'out') {
         h.t += (dt * SPEED) / Math.max(1, h.dist);
+        wantOpen = 0.75;
         if (h.t >= 1) {
           h.t = 1; h.state = 'hold'; h.holdT = 0.22;
           audio.clawGrab();
           this.game.onClawHit(i, h.hit, h.target.clone(), h);
         }
       } else if (h.state === 'hold') {
+        wantOpen = -0.08;
         h.holdT -= dt;
         if (h.holdT <= 0) h.state = 'back';
       } else if (h.state === 'back') {
+        wantOpen = h.carry ? -0.08 : 0.05;
         h.t -= (dt * SPEED * 1.3) / Math.max(1, h.dist);
         if (h.t <= 0) {
           h.t = 0; h.state = 'idle';
           if (h.carry) { const c = h.carry; h.carry = null; this.game.onClawReturn(i, c); }
         }
       }
-      // ease the claw head between its rest pose and the target
+      // fingers
+      h.open += (wantOpen - h.open) * Math.min(1, dt * 14);
+      for (const j of h.jaws) j.quaternion.setFromAxisAngle(j.userData.axis, h.open);
+
+      // position: idle bob + recoil, or flying toward the target
+      h.kick = Math.max(0, h.kick - dt * 5);
+      const idle = h.rest.clone();
+      idle.y += Math.sin(now * 1.7 + i * 1.3) * 0.004;
+      idle.z += h.kick * 0.05;
       const k = h.state === 'idle' ? 0 : h.t;
-      h.head.position.lerpVectors(h.rest, worldTarget, k);
+      h.head.position.lerpVectors(idle, local, k);
+      // point the jaws at what they fly toward, settle back when idle
+      if (h.state !== 'idle') h.dir.copy(local).sub(h.rest).normalize();
+      else h.dir.lerp(h.restDir, Math.min(1, dt * 8)).normalize();
+      h.head.quaternion.setFromUnitVectors(FWD, h.dir).multiply(DOWN_TO_FORWARD);
       if (h.carry) h.carry.position.copy(h.head.getWorldPosition(new THREE.Vector3()));
-      const pos = h.line.geometry.attributes.position;
-      pos.setXYZ(0, h.rest.x, h.rest.y, h.rest.z + 0.06);
-      pos.setXYZ(1, h.head.position.x, h.head.position.y, h.head.position.z);
-      pos.needsUpdate = true;
-      h.line.visible = h.state !== 'idle';
+
+      // cable: anchor behind the shoulder -> back of the hand
+      const back = h.head.position.clone().addScaledVector(h.dir, -0.01);
+      const span = back.clone().sub(h.anchor);
+      h.cable.position.copy(h.anchor);
+      h.cable.scale.set(1, span.length(), 1);
+      h.cable.quaternion.setFromUnitVectors(UP, span.normalize());
     }
-    // gentle sway
-    this.view.position.y = -0.3 + Math.sin(performance.now() / 700) * 0.004;
   }
 
   state(i) { const h = this.hands[i]; return { charged: h.charged > 0, out: h.state !== 'idle' }; }

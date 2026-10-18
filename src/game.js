@@ -90,7 +90,7 @@ export class Game {
   }
 
   litByFlashlight(p) {
-    if (!this.player.flashOn || this.player.flashlight.intensity < 30) return false;
+    if (!this.player.flashOn || this.player.flashlight.intensity < 6) return false;
     const cam = this.camera.getWorldPosition(new THREE.Vector3());
     const to = p.clone().sub(cam);
     const d = to.length();

@@ -27,7 +27,7 @@ export class Player {
     this.adrenaline = false;
     this.surface = 'ground';
 
-    const fl = (this.flashlight = new THREE.SpotLight(0xffe2b8, 260, 40, 0.46, 0.55, 1.5));
+    const fl = (this.flashlight = new THREE.SpotLight(0xffe2b8, 45, 40, 0.46, 0.55, 1.0));
     fl.castShadow = true;
     fl.shadow.mapSize.set(1024, 1024);
     fl.shadow.camera.near = 0.2;
@@ -131,7 +131,7 @@ export class Player {
     let flicker = 1;
     if (this.flashOn && this.battery < 15 && Math.random() < 0.08) flicker = Math.random() * 0.4;
     if (this.flickerOverride !== undefined) flicker = this.flickerOverride;
-    this.flashlight.intensity = this.flashOn ? 260 * flicker * (0.6 + 0.4 * Math.min(1, this.battery / 30)) : 0;
+    this.flashlight.intensity = this.flashOn ? 45 * flicker * (0.6 + 0.4 * Math.min(1, this.battery / 30)) : 0;
 
     this.eye += ((this.crouched ? EYE_CROUCH : EYE) - this.eye) * Math.min(1, dt * 10);
     this.syncCamera(dt);
