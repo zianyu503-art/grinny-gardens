@@ -13,10 +13,13 @@ export class HUD {
   }
 
   show(on) { this.el.hud.classList.toggle('hidden', !on); }
-  objective(t) { this.el.objective.textContent = t || ''; }
-  prompt(t) { if (this.el.prompt.textContent !== (t || '')) this.el.prompt.textContent = t || ''; }
+  /** Optional text filter (touch devices swap keyboard wording). */
+  tr(t) { return this.filter ? this.filter(t) : t; }
 
-  hint(t, dur = 6) { this.el.hint.textContent = t; this.hintTimer = dur; }
+  objective(t) { this.el.objective.textContent = t || ''; }
+  prompt(t) { t = this.tr(t || ''); if (this.el.prompt.textContent !== t) this.el.prompt.textContent = t; }
+
+  hint(t, dur = 6) { this.el.hint.textContent = this.tr(t); this.hintTimer = dur; }
 
   /** Queue subtitle lines: [{who, text, dur}] */
   say(lines, interrupt = false) {
@@ -46,7 +49,7 @@ export class HUD {
     }
   }
 
-  inventory(items) { this.el.inventory.innerHTML = items.filter(Boolean).join('<br>'); }
+  inventory(items) { this.el.inventory.innerHTML = items.filter(Boolean).map((i) => this.tr(i)).join('<br>'); }
 
   fade(to, seconds = 1.2) {
     this.el.fade.style.transition = `opacity ${seconds}s`;

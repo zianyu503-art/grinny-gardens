@@ -7,6 +7,8 @@ export class Input {
     this.locked = false;
     this.sensitivity = 1;
     this.enabled = true;
+    this.axis = { x: 0, z: 0, active: false }; // analog stick (touch)
+    this.touchMode = false;
     addEventListener('keydown', (e) => {
       if (e.repeat) return;
       this.keys.add(e.code);
@@ -34,6 +36,7 @@ export class Input {
   }
 
   lock() {
+    if (this.touchMode) return;
     try {
       const p = this.canvas.requestPointerLock?.({ unadjustedMovement: true });
       p?.catch?.(() => this.canvas.requestPointerLock()?.catch?.(() => {}));
@@ -49,6 +52,12 @@ export class Input {
     this.mouse.dx = this.mouse.dy = 0;
     return this.enabled ? d : { x: 0, y: 0 };
   }
+
+  /** Touch helpers: press a key for one frame, hold a key, or fire a mouse button. */
+  tap(code) { this.pressed.add(code); }
+  hold(code, on) { if (on) this.keys.add(code); else this.keys.delete(code); }
+  tapMouse(btn) { this.mouse.clicked.add(btn); }
+  look(dx, dy) { this.mouse.dx += dx; this.mouse.dy += dy; }
 
   endFrame() {
     this.pressed.clear();

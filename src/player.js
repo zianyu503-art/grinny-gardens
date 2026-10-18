@@ -79,14 +79,19 @@ export class Player {
       if (input.down('KeyS')) mz += 1;
       if (input.down('KeyA')) mx -= 1;
       if (input.down('KeyD')) mx += 1;
+      if (input.axis.active) { mx = input.axis.x; mz = input.axis.z; }
       if (input.hit('KeyC') || input.hit('ControlLeft')) this.crouched = !this.crouched;
       if (input.hit('KeyF')) this.toggleFlash();
     }
-    const moving = mx || mz;
-    const wantSprint = input.down('ShiftLeft') || input.down('ShiftRight');
+    const stick = Math.min(1, Math.hypot(mx, mz));
+    const moving = stick > 0.12;
+    if (!moving) { mx = 0; mz = 0; }
+    // touch: pushing the stick to the rim (forward) sprints
+    const wantSprint = input.down('ShiftLeft') || input.down('ShiftRight') || (input.axis.active && stick > 0.93);
     const canSprint = wantSprint && moving && this.staminaLock <= 0 && mz <= 0;
     if (canSprint) this.crouched = false;
     let speed = this.crouched ? 1.45 : canSprint ? 5.9 : 2.9;
+    if (input.axis.active && !canSprint) speed *= Math.max(0.35, stick);
     if (canSprint) {
       this.stamina -= dt * (this.adrenaline ? 7 : 20);
       if (this.stamina <= 0) { this.stamina = 0; this.staminaLock = 2.5; }

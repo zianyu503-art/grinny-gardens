@@ -103,3 +103,60 @@ button:disabled { opacity: .5; cursor: wait; }
 #mapOverlay p { color: var(--dim); font-size: 13px; margin: 10px; }
 select { font: inherit; background: #111; color: var(--fg); border: 1px solid #555; padding: 2px 6px; pointer-events: auto; }
 #pause label, #pause input { pointer-events: auto; }
+
+/* ---------------- touch controls */
+body.touch, body.touch * { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+body.touch #game { touch-action: none; }
+#touchUI { position: fixed; inset: 0; z-index: 5; touch-action: none; }
+#tLook { position: absolute; left: 40%; right: 0; top: 0; bottom: 0; }
+#tStickZone { position: absolute; left: 0; top: 25%; width: 40%; bottom: 0; }
+#tStick {
+  position: fixed; width: 120px; height: 120px; margin: -60px 0 0 -60px; border-radius: 50%;
+  border: 2px solid rgba(232, 224, 204, .25); left: 110px; top: calc(100% - 130px); opacity: .45; transition: opacity .2s;
+}
+#tStick.on { opacity: .9; }
+#tStick.sprint { border-color: #d8a050; }
+#tStick i {
+  position: absolute; left: 35px; top: 35px; width: 50px; height: 50px; border-radius: 50%;
+  background: rgba(232, 224, 204, .35);
+}
+.tbtn {
+  position: absolute; margin: 0; padding: 0; border-radius: 50%; font-size: 15px; letter-spacing: 0;
+  color: var(--fg); background: rgba(10, 8, 8, .45); border: 2px solid rgba(232, 224, 204, .4);
+  width: 74px; height: 74px; touch-action: none;
+}
+.tbtn.down { background: rgba(232, 224, 204, .35); }
+.tbtn.claw.l { right: calc(24px + 86px); bottom: calc(26px + env(safe-area-inset-bottom)); border-color: #3a6ad0; }
+.tbtn.claw.r { right: calc(16px + env(safe-area-inset-right)); bottom: calc(70px + env(safe-area-inset-bottom)); border-color: #d04030; }
+.tbtn.charged { box-shadow: 0 0 16px 4px #5ab8ff; }
+.tbtn.use { right: calc(110px + env(safe-area-inset-right)); bottom: 120px; width: 62px; height: 62px; opacity: .45; }
+.tbtn.use.ready { opacity: 1; border-color: var(--fg); }
+.tbtn.small { width: 50px; height: 50px; font-size: 14px; }
+.tbtn.crouch { right: calc(198px + env(safe-area-inset-right)); bottom: 32px; }
+.tbtn.flash { right: calc(186px + env(safe-area-inset-right)); bottom: 100px; }
+.tbtn.top { top: calc(12px + env(safe-area-inset-top)); width: 52px; height: 40px; border-radius: 8px; font-size: 14px; }
+.tbtn.map { right: 78px; }
+.tbtn.pause { right: 16px; }
+#tRotate {
+  display: none; position: fixed; inset: 0; background: rgba(0, 0, 0, .9); color: var(--fg);
+  align-items: center; justify-content: center; text-align: center; font-size: 20px; line-height: 1.8; z-index: 20;
+}
+#tRotate.show { display: flex; }
+#tRotate small { color: var(--dim); font-size: 13px; }
+body.touch #inventory { top: 60px; }
+body.touch #meters { bottom: auto; top: 46px; }
+body.touch #claws { display: none; }
+body.touch #subtitle { bottom: 32%; font-size: 16px; }
+body.touch #prompt { top: 62%; }
+@media (max-height: 500px) {
+  .screen h1 { font-size: 44px; letter-spacing: 8px; }
+  .screen h2 { font-size: 18px; margin: 2px 0 6px; }
+  .screen p { margin: 4px 0; font-size: 12px; line-height: 1.5; }
+  .vhs-tag { font-size: 11px; top: 10px; left: 14px; }
+  button { font-size: 15px; padding: 8px 26px; margin-top: 8px; }
+  .controls { margin-top: 10px; font-size: 11px; line-height: 1.6; }
+  #loadbar { margin-top: 8px; }
+  .vol { margin: 4px; }
+  #objective { font-size: 12px; top: 12px; }
+  #hint { top: 22%; font-size: 13px; }
+}

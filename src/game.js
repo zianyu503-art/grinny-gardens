@@ -18,11 +18,12 @@ const v3 = new THREE.Vector3();
 const $ = (id) => document.getElementById(id);
 
 export class Game {
-  constructor(canvas) {
+  constructor(canvas, { touch = false } = {}) {
     this.r = new Renderer(canvas);
     this.scene = this.r.scene;
     this.camera = this.r.camera;
     this.input = new Input(canvas);
+    this.input.touchMode = touch;
     this.physics = new Physics();
     this.hud = new HUD();
     this.level = new Level(this.scene, this.physics);
@@ -52,9 +53,12 @@ export class Game {
     };
     $('volume').oninput = (e) => audio.setVolume(+e.target.value);
     $('sens').oninput = (e) => { this.input.sensitivity = +e.target.value; };
-    $('pause').onclick = (e) => { if (!['SELECT', 'INPUT', 'OPTION', 'LABEL'].includes(e.target.tagName)) this.input.lock(); };
-    let q = 'mid';
-    try { q = localStorage.getItem('quality') || 'mid'; } catch { /* storage unavailable */ }
+    $('pause').onclick = (e) => {
+      if (['SELECT', 'INPUT', 'OPTION', 'LABEL'].includes(e.target.tagName)) return;
+      if (this.input.touchMode) this.resume(); else this.input.lock();
+    };
+    let q = this.input.touchMode ? 'low' : 'mid';
+    try { q = localStorage.getItem('quality') || q; } catch { /* storage unavailable */ }
     $('quality').value = q;
     this.r.setQuality(q, this.player.flashlight);
     $('quality').onchange = (e) => {
@@ -63,6 +67,17 @@ export class Game {
     };
     $('retryBtn').onclick = () => this.respawn();
     $('againBtn').onclick = () => location.reload();
+  }
+
+  pause() {
+    if (!this.started || this.dying || this.ended) return;
+    this.paused = true;
+    $('pause').classList.remove('hidden');
+  }
+
+  resume() {
+    this.paused = false;
+    $('pause').classList.add('hidden');
   }
 
   // ------------------------------------------------------------------ helpers
@@ -800,6 +815,7 @@ export class Game {
       this.time += dt; this.player.update(dt, this.input, this.physics);
       for (const t of this.timers.filter((t) => t.t <= this.time)) { this.timers.splice(this.timers.indexOf(t), 1); t.fn(); }
     }
+    this.onHudTick?.();
     this.input.endFrame();
     this.r.render(performance.now() / 1000);
   }

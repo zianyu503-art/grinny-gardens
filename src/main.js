@@ -1,5 +1,6 @@
 import { loadAll } from './assets.js';
 import { audio } from './audio.js';
+import { isTouchDevice, setupTouch, touchText } from './touch.js';
 
 const $ = (id) => document.getElementById(id);
 const startBtn = $('startBtn');
@@ -7,7 +8,13 @@ const startBtn = $('startBtn');
 async function boot() {
   await loadAll((k) => { $('loadbar').firstElementChild.style.width = `${Math.round(k * 100)}%`; });
   const { Game } = await import('./game.js');
-  const game = (window.game = new Game($('game')));
+  const touch = isTouchDevice();
+  if (touch) {
+    document.body.classList.add('touch');
+    $('title').querySelector('.controls').innerHTML = '左半邊：拖曳移動（推到底奔跑）· 右半邊：拖曳轉頭<br>按鈕：左爪／右爪、互動、蹲、燈、地圖　·　請橫放手機';
+  }
+  const game = (window.game = new Game($('game'), { touch }));
+  if (touch) { setupTouch(game); game.hud.filter = touchText; }
 
   // debug: ?zone=carousel|funhouse|tunnel|coaster|ferris jumps ahead with the needed progress
   const zone = new URLSearchParams(location.search).get('zone');
@@ -16,6 +23,9 @@ async function boot() {
   startBtn.disabled = false;
   startBtn.textContent = '開始';
   startBtn.onclick = () => {
+    if (touch) {
+      document.documentElement.requestFullscreen?.().then(() => screen.orientation?.lock?.('landscape')).catch(() => {});
+    }
     $('title').classList.add('hidden');
     game.input.lock();
     game.start();
