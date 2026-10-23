@@ -1,12 +1,13 @@
 // Hand-drawn park map, used both for in-world map boards and the paper map overlay (M).
 import * as THREE from 'three';
 
+// Layout is supplied by the level (park.js) via setMapLayout().
+let LAYOUT = null;
 const B = { minX: -46, maxX: 46, minZ: -202, maxZ: 68 };
-
-export const MAP_LABELS = [
-  ['售票亭', -6, 51], ['正門', 0, 40], ['旋轉木馬', 0, 20], ['碰碰車', -34, 22], ['馬戲團', 34, 21],
-  ['咖啡杯', -15, 7], ['鬼屋', 0, -18], ['員工通道', 0, -53], ['雲霄飛車', 0, -102], ['吊橋', 0, -138], ['摩天輪', 0, -186],
-];
+export function setMapLayout(l) {
+  LAYOUT = l;
+  Object.assign(B, { minX: l.minX, maxX: l.maxX, minZ: l.minZ, maxZ: l.maxZ });
+}
 
 /**
  * orient 'v': entrance at the bottom, ferris wheel at the top (paper map)
@@ -42,27 +43,22 @@ export function drawParkMap(g, W, H, { orient = 'v', here = null, player = null,
     g.strokeStyle = '#4a3a24'; g.lineWidth = 2 * unit; g.strokeRect(...rect(x0, z0, x1, z1));
     g.setLineDash([]);
   };
-  zone(-15, 40, 15, 66, 'rgba(120,140,90,.35)');
-  zone(-44, 0, 44, 40, 'rgba(120,140,90,.35)');
-  zone(-16, -36, 16, 0, 'rgba(110,60,110,.35)');
-  zone(-12, -70, 12, -36, 'rgba(90,90,90,.3)', true);
-  zone(-4, -134, 4, -70, 'rgba(140,110,70,.35)');
-  zone(-25, -200, 25, -142, 'rgba(120,140,90,.35)');
-  // the pit
-  g.fillStyle = '#1a1410'; g.fillRect(...rect(-12, -134, 12, -142));
-  g.fillStyle = '#8a6a40'; g.fillRect(...rect(-1.5, -134, 1.5, -142));
+  const Lo = LAYOUT;
+  for (const z of Lo.zones) zone(z.x0, z.z0, z.x1, z.z1, z.fill, z.dash);
+  // the pit and the bridge
+  g.fillStyle = '#1a1410'; g.fillRect(...rect(Lo.pit.x0, Lo.pit.z0, Lo.pit.x1, Lo.pit.z1));
+  g.fillStyle = '#8a6a40'; g.fillRect(...rect(-Lo.bridgeHalf, Lo.pit.z0, Lo.bridgeHalf, Lo.pit.z1));
   // path
   g.strokeStyle = '#7a1414'; g.lineWidth = 3 * unit; g.setLineDash([10 * unit, 8 * unit]);
-  g.beginPath(); g.moveTo(...P(0, 63)); g.lineTo(...P(0, -186)); g.stroke(); g.setLineDash([]);
+  g.beginPath(); g.moveTo(...P(...Lo.path[0])); g.lineTo(...P(...Lo.path[1])); g.stroke(); g.setLineDash([]);
   // attractions
   const circ = (x, z, r, fill) => { const [cx, cy] = P(x, z); g.fillStyle = fill; g.beginPath(); g.arc(cx, cy, r * S, 0, 7); g.fill(); g.stroke(); };
   g.strokeStyle = '#3a2a18'; g.lineWidth = 2 * unit;
-  circ(0, 20, 6.4, '#b05050'); circ(34, 21, 9, '#c06040'); circ(-15, 7, 5, '#a07090'); circ(0, -186, 8, 'rgba(160,160,170,.6)');
-  g.fillStyle = '#5a6a8a'; g.fillRect(...rect(-39, 15, -29, 29)); g.strokeRect(...rect(-39, 15, -29, 29));
-  g.fillStyle = '#9a5a3a'; g.fillRect(...rect(-7.2, 52, -4.8, 50)); g.strokeRect(...rect(-7.2, 52, -4.8, 50));
+  for (const [x, z, r, f] of Lo.circles) circ(x, z, r, f);
+  for (const [x0, x1, z0, z1, f] of Lo.rects) { g.fillStyle = f; g.fillRect(...rect(x0, z0, x1, z1)); g.strokeRect(...rect(x0, z0, x1, z1)); }
   g.fillStyle = '#2a1a10';
   g.font = `bold ${Math.round(17 * unit)}px "PingFang TC", "Noto Sans TC", sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle';
-  for (const [t, x, z] of MAP_LABELS) {
+  for (const [t, x, z] of Lo.labels) {
     const [cx, cy] = P(x, z);
     g.fillStyle = 'rgba(205,191,156,.75)';
     const w = g.measureText(t).width + 8 * unit;
@@ -77,15 +73,15 @@ export function drawParkMap(g, W, H, { orient = 'v', here = null, player = null,
   if (scribbles) {
     g.save();
     g.strokeStyle = 'rgba(150,10,10,.85)'; g.fillStyle = 'rgba(150,10,10,.9)'; g.lineWidth = 4 * unit;
-    const [fx, fy] = P(0, -18);
-    g.beginPath(); g.ellipse(fx, fy, 22 * S, 10 * S, 0, 0, 7); g.stroke();
+    const [fx, fy] = P(...LAYOUT.scribbles.funhouse);
+    g.beginPath(); g.ellipse(fx, fy, 18 * S, 12 * S, 0, 0, 7); g.stroke();
     g.font = `${Math.round(18 * unit)}px "Comic Sans MS", "PingFang TC", sans-serif`;
     g.fillText('不要出聲！', fx + 30 * unit, fy + 26 * unit);
-    const [wx, wy] = P(0, -186);
+    const [wx, wy] = P(...LAYOUT.scribbles.ferris);
     g.beginPath(); g.moveTo(wx - 14 * unit, wy - 14 * unit); g.lineTo(wx + 14 * unit, wy + 14 * unit);
     g.moveTo(wx + 14 * unit, wy - 14 * unit); g.lineTo(wx - 14 * unit, wy + 14 * unit); g.stroke();
     g.fillText('他們都在這裡', wx, wy + 34 * unit);
-    const [cx, cy] = P(0, 20);
+    const [cx, cy] = P(...LAYOUT.scribbles.carousel);
     g.fillText('照著牠們', cx + 40 * unit, cy - 20 * unit);
     g.restore();
   }

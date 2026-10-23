@@ -4,12 +4,8 @@ import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
 
 const MODELS = [
   'grinny', 'hornman', 'horse', 'director',
-  'booth', 'arch', 'carousel', 'lamp', 'bench', 'fence', 'trash', 'crate', 'balloon_cart', 'popcorn',
-  'fuse', 'fusebox', 'battery', 'cassette', 'keycard', 'generator', 'receiver', 'lever', 'gate_handle',
-  'coaster_gate', 'coaster_track', 'coaster_support', 'coaster_car', 'ferris', 'funhouse', 'staff_door',
-  'jackbox', 'deadtree', 'plush_pile', 'bridge',
-  'circus_tent', 'bumper_arena', 'bumper_car', 'teacups', 'cotton_candy', 'striker', 'billboard', 'signpost',
-  'mapboard', 'trashbags', 'turnstile', 'circus_wagon', 'stall_tent', 'coaster_hill',
+  'fence', 'crate', 'fuse', 'fusebox', 'battery', 'cassette', 'keycard', 'generator', 'receiver', 'lever',
+  'gate_handle', 'jackbox', 'deadtree', 'plush_pile', 'billboard', 'mapboard', 'trashbags', 'coaster_hill',
   'clawpack_full', 'clawhands',
 ];
 
@@ -64,16 +60,30 @@ function prepare(root) {
   });
 }
 
+let park = null;
+/** The hand-made park level (scene + layout data from blender/export_park.py). */
+export function getPark() { return park; }
+
 export async function loadAll(onProgress) {
   const loader = new GLTFLoader();
   let done = 0;
-  await Promise.all(MODELS.map(async (name) => {
+  const total = MODELS.length + 1;
+  const parkJob = (async () => {
+    const [gltf, data] = await Promise.all([
+      loader.loadAsync(`${import.meta.env.BASE_URL}models/park.glb`),
+      fetch(`${import.meta.env.BASE_URL}park.json`).then((r) => r.json()),
+    ]);
+    park = { gltf, data };
+    done++;
+    onProgress?.(done / total);
+  })();
+  await Promise.all([parkJob, ...MODELS.map(async (name) => {
     const gltf = await loader.loadAsync(`${import.meta.env.BASE_URL}models/${name}.glb`);
     prepare(gltf.scene);
     cache[name] = gltf;
     done++;
-    onProgress?.(done / MODELS.length);
-  }));
+    onProgress?.(done / total);
+  })]);
 }
 
 /** Fresh instance of a model. Materials are shared unless `uniqueMaterials` is set. */

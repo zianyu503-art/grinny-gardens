@@ -1,0 +1,13 @@
+{
+  "source": "blender/source/GRINNY_GARDENS.blend",
+  "scale": 1.5,
+  "note": "Each zone is the slice of the park between y0 and y1 (Blender units, before scaling). It is scaled by 'scale' and then pushed further along the route by the sum of all 'gap' values up to and including it (metres). Edit gaps / scale and re-run: blender -b --factory-startup --python blender/export_park.py",
+  "zones": [
+    { "name": "gate",     "y0": -20,   "y1": 10.0,  "gap": 0 },
+    { "name": "midway",   "y0": 10.0,  "y1": 29.3,  "gap": 14 },
+    { "name": "funhouse", "y0": 29.3,  "y1": 44.3,  "gap": 10 },
+    { "name": "staff",    "y0": 44.3,  "y1": 53.45, "gap": 6 },
+    { "name": "coaster",  "y0": 53.45, "y1": 70.55, "gap": 10 },
+    { "name": "ferris",   "y0": 70.55, "y1": 95,    "gap": 12 }
+  ]
+}

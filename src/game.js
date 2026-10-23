@@ -4,7 +4,7 @@ import { audio } from './audio.js';
 import { Renderer } from './render.js';
 import { Input } from './input.js';
 import { Physics } from './physics.js';
-import { Level, GATES_Z } from './level.js';
+import { Level } from './level.js';
 import { Player } from './player.js';
 import { ClawPack, findInteract } from './clawpack.js';
 import { HUD } from './hud.js';
@@ -36,7 +36,7 @@ export class Game {
     this.dying = false;
     this.flags = { fuses: 0, fusesIn: 0, tapes: 0, rec2: 0, photos: 0 };
     this.zone = 'entrance';
-    this.checkpoint = { x: 0, z: 63, yaw: 0 };
+    this.checkpoint = { x: 0, z: 0, yaw: 0 };
     this.timers = [];
     this.triggers = [];
     this.lightPool = Array.from({ length: POOL }, () => {
@@ -104,6 +104,8 @@ export class Game {
   // ------------------------------------------------------------------ world wiring
   setupWorld() {
     const L = this.level, I = L.items;
+    const sp = L.points.spawn;
+    this.checkpoint = { x: sp.x, z: sp.z, yaw: 0 };
     // entrance: claw pack, generator, receiver, statue
     L.interact(I.packPickup, { label: '撿起 抓抓爪', use: () => this.takePack() });
     L.interact(I.gen1, { kind: 'power', label: '發電機（用爪子抓住電球）' });
@@ -113,7 +115,7 @@ export class Game {
     // paper map on the ticket booth counter
     const paper = new THREE.Mesh(new THREE.PlaneGeometry(0.42, 0.3), new THREE.MeshStandardMaterial({ color: 0xcdbf9c, roughness: 0.9 }));
     paper.rotation.set(-Math.PI / 2, 0, 0.3);
-    paper.position.set(-5.4, 1.165, 52.2);
+    paper.position.copy(I.paperSpot);
     this.scene.add(paper);
     L.interact(paper, { kind: 'pickup', label: '撿起 樂園導覽圖', item: 'map' });
     // polaroids of the missing children
@@ -158,41 +160,37 @@ export class Game {
     this.addTape(fp.tT[0], 'tunnel1');
     this.addTape(fp.tT[1], 'tunnel2');
     L.interact(I.tunDoor, { label: '推開門', use: () => this.openTunnelDoor() });
-    const wp = L.points.window;
-    this.windowFace = new Grinny(this, wp.x + 2.2, wp.z);
+    const wp = L.points.window, wr = L.points.windowRect;
+    this.windowFace = new Grinny(this, wp.x + L.points.windowFaceOffset, wp.z);
     this.windowFace.obj.rotation.y = -Math.PI / 2;
-    this.windowFace.obj.position.y = -1.15;
     this.windowFace.visible = false;
-    this.trigger((p) => this.flags.tapes >= 2 && p.x > 3 && p.z < -50 && p.z > -56 && this.inView(new THREE.Vector3(wp.x, 1.7, wp.z), 0.5),
-      () => this.windowScare());
+    this.trigger((p) => this.flags.tapes >= 2 && p.x > wr.x0 && p.x < wr.x1 && p.z > wr.z0 && p.z < wr.z1
+      && this.inView(new THREE.Vector3(wp.x + 1, 3.0, wp.z), 0.5), () => this.windowScare());
 
     // coaster: gates, lever, chase
     I.gates.forEach((g) => L.interact(g.handle, { kind: 'handle', label: '閘門把手（用爪子拉）', gate: g,
       aimPoint: g.handle.position.clone().add(new THREE.Vector3(0, 1.35, 0.1)) }));
     L.interact(I.lever, { kind: 'lever', label: '拉下拉桿', use: () => this.pullLever() });
-    this.grinny = new Grinny(this, 0, -64);
+    const route = (this.route = L.points.route);
+    this.grinny = new Grinny(this, route.grinnySpawn.x, route.grinnySpawn.z);
     this.grinny.visible = false;
-    this.trigger((p) => p.z < -75 && !this.flags.chase, () => this.startChase(), true);
+    this.trigger((p) => p.z < route.chaseTrigger && !this.flags.chase, () => this.startChase(), true);
 
     // ferris
     L.interact(I.gen2, { kind: 'power', label: '發電機（用爪子抓住電球）' });
     I.receivers2.forEach((rc, i) => L.interact(rc, { kind: 'receiver', label: '摩天輪電源接收器', powered: false,
       onPower: () => this.powerWheel() }));
     this.director = spawn('director');
-    this.director.position.set(0, -14, -177);
+    const ds = L.points.directorStart;
+    this.director.position.copy(ds);
     this.director.scale.setScalar(2.4);
-    this.directorLight = this.level.light(0, 7, -170, { color: 0xff2010, intensity: 0, distance: 26, flicker: 0.15 });
+    this.directorLight = this.level.light(ds.x, 7, ds.z + 7, { color: 0xff2010, intensity: 0, distance: 26, flicker: 0.15 });
     this.director.visible = false;
     this.scene.add(this.director);
 
     // zone checkpoints / ambience
-    const zones = [
-      ['carousel', (p) => p.z < 39, { x: 0, z: 37, yaw: 0 }],
-      ['funhouse', (p) => p.z < -1.5, { x: 0, z: -2.5, yaw: 0 }],
-      ['tunnel', (p) => p.z < -37, { x: 0, z: -38.5, yaw: 0 }],
-      ['coaster', (p) => p.z < -72, { x: 0, z: -72.5, yaw: 0 }],
-      ['ferris', (p) => p.z < -145, { x: 0, z: -146, yaw: 0 }],
-    ];
+    const zones = ['carousel', 'funhouse', 'tunnel', 'coaster', 'ferris']
+      .map((n) => [n, (p) => p.z < route[n].z, route[n].cp]);
     zones.forEach(([name, test, cp]) => this.trigger(test, () => this.enterZone(name, cp)));
   }
 
@@ -231,7 +229,7 @@ export class Game {
     const indoor = name === 'funhouse' || name === 'tunnel';
     audio.setIndoor(indoor);
     this.player.surface = indoor ? 'wood' : 'ground';
-    this.scene.fog.density = indoor ? 0.07 : 0.05;
+    this.scene.fog.density = indoor ? 0.06 : 0.038;
     if (name === 'carousel') {
       this.statue.active = false; this.statue.visible = false;
       this.hud.objective('找到 3 根保險絲，替鬼屋接上電源（0/3）');
@@ -370,7 +368,7 @@ export class Game {
     this.updateInventory();
     audio.zap(I.fusebox.position);
     audio.rumble(I.funhouse.position, 2, 0.6);
-    this.anim(2, (k) => { I.jaw.position.y = -k * 3.3; });
+    this.anim(2, (k) => { I.jaw.position.y = -k * (I.jawDrop ?? 3.3); });
     this.physics.setEnabled(I.jawCollider, false);
     this.hud.objective('進入鬼屋');
     this.horses.forEach((h) => (h.active = false));
@@ -431,17 +429,17 @@ export class Game {
     this.flags.chase = true;
     this.player.adrenaline = true;
     const g = this.grinny;
-    g.pos.set(0, 0, -67);
+    g.pos.set(this.route.grinnySpawn.x, 0, this.route.grinnySpawn.z);
     g.obj.rotation.set(0, Math.PI, 0);
     g.visible = true;
     g.state = 'idle';
     g.maxSpeed = 5.75;
     g.speed = 2;
     this.pa('chase');
-    audio.giggle(new THREE.Vector3(0, 2, -66), 1);
+    audio.giggle(this.route.grinnySpawn.clone().setY(2), 1);
     this.hud.objective('快跑！');
     this.after(2.2, () => {
-      audio.rumble(new THREE.Vector3(0, 1, -70), 1.2, 0.9);
+      audio.rumble(this.route.tunnelDoor, 1.2, 0.9);
       audio.stinger(1.0);
       this.player.shake(0.8);
       g.state = 'chase';
@@ -454,13 +452,13 @@ export class Game {
     gate.open = true;
     audio.clank(gate.model.position, 0.9);
     audio.rumble(gate.model.position, 1, 0.5);
-    this.anim(0.9, (k) => { gate.grate.position.y = k * 3.2; });
+    this.anim(0.9, (k) => { gate.grate.position.y = k * (gate.lift ?? 3.2); });
     this.after(0.45, () => this.physics.setEnabled(gate.collider, false));
   }
 
   pullLever() {
     if (this.flags.bridgeDown) return;
-    if (this.player.pos.z > -142.5) { this.hud.hint('先過橋。', 2); return; }
+    if (this.player.pos.z > this.route.leverSideZ) { this.hud.hint('先過橋。', 2); return; }
     this.flags.bridgeDown = true;
     const I = this.level.items;
     const h = I.lever.getObjectByName('Handle');
@@ -470,7 +468,7 @@ export class Game {
     const g = this.grinny;
     if (g.state === 'chase') {
       g.state = 'idle';
-      g.pos.set(0, 0, Math.min(g.pos.z, -135.5));
+      g.pos.set(0, 0, Math.min(g.pos.z, this.route.bridgeStandZ));
       g.playOnce('Attack', 1.2);
     }
     this.after(0.5, () => {
@@ -495,7 +493,7 @@ export class Game {
     this.anim(2.5, (k) => { I.wheel.rotation.z = startA + k * (Math.PI / 4); });
     setEmit(I.ferris, f.rec2 / 4);
     I.wheelLight.intensity = 3 + f.rec2 * 3;
-    if (f.rec2 === 2) this.after(2, () => audio.giggle(new THREE.Vector3(0, 10, -186), 0.7));
+    if (f.rec2 === 2) this.after(2, () => audio.giggle(this.route.finalSoundPos, 0.7));
     if (f.rec2 === 4) this.after(2.8, () => this.finale());
   }
 
@@ -505,26 +503,27 @@ export class Game {
     p.frozen = true;
     this.input.enabled = false;
     this.claw.show(false);
-    p.look(new THREE.Vector3(0, 9, -190), 1.5);
-    this.musicBox = audio.musicBox(new THREE.Vector3(0, 10, -186), 0.9);
+    const hub = this.level.points.hub, ds = this.level.points.directorStart;
+    p.look(new THREE.Vector3(hub.x, hub.y, hub.z), 1.5);
+    this.musicBox = audio.musicBox(this.route.finalSoundPos, 0.9);
     this.wheelSpin = 0.6;
     this.after(3, () => this.pa('final'));
     this.after(5, () => {
       const d = this.director;
       d.visible = true;
-      audio.rumble(new THREE.Vector3(0, 2, -192), 6, 1);
+      audio.rumble(new THREE.Vector3(ds.x, 2, ds.z), 6, 1);
       audio.stinger(1);
       this.directorLight.intensity = 26;
       this.anim(6, (k) => { d.position.y = -14 + k * 14; p.shake(0.4); });
-      p.look(new THREE.Vector3(0, 6, -177), 1.2);
+      p.look(new THREE.Vector3(ds.x, 6, ds.z), 1.2);
     });
     this.after(11.5, () => {
       audio.scream(1);
-      p.look(new THREE.Vector3(0, 6.5, -172), 6);
+      p.look(new THREE.Vector3(ds.x, 6.5, ds.z + 5), 6);
       this.r.u.red.value = 0.8;
       this.r.u.warp.value = 2;
       p.shake(1.5);
-      const from = this.director.position.z, to = Math.min(p.pos.z - 4, -160);
+      const from = this.director.position.z, to = Math.max(from, p.pos.z - 5);
       this.anim(0.6, (k) => { this.director.position.z = from + k * (to - from); });
     });
     this.after(12.4, () => {
@@ -684,7 +683,7 @@ export class Game {
       this.flags.chase = false;
       this.grinny.state = 'idle';
       this.grinny.visible = false;
-      this.grinny.pos.set(0, 0, -64);
+      this.grinny.pos.set(this.route.grinnySpawn.x, 0, this.route.grinnySpawn.z);
       this.level.items.gates.forEach((g) => {
         g.open = false; g.grate.position.y = 0; this.physics.setEnabled(g.collider, true);
       });
