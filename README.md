@@ -40,14 +40,4 @@ blender -b --factory-startup --python blender/game_export.py -- props
 - `blender/creature_*.py`：四隻生物
 - `blender/props.py`：樂園道具
 - `blender/source/ClawPack.blend`：玩家的抓抓爪（手工建模），用 `blender -b --factory-startup --python blender/export_user_clawpack.py` 匯出成 `clawpack_full.glb`（入口撿到的背包）與 `clawhands.glb`（第一人稱的藍爪／紅爪，爪指可動）
-- `src/`：遊戲程式（關卡 `level.js` + `park.js`、劇情與謎題 `game.js`、怪物 AI `monsters.js`）
-
-### 樂園地圖
-
-整座樂園來自 `blender/source/GRINNY_GARDENS.blend`。`blender/export_park.py` 把它切成六個區域（入口、廣場、鬼屋、員工通道、雲霄飛車、摩天輪），拉開區域之間的距離，再匯出成 `public/models/park.glb` 和 `public/park.json`（碰撞、燈光、重要位置）。
-
-要調整間距或整體大小，改 `blender/layout.json`（`scale`、每區的 `gap`），然後重新匯出：
-
-```bash
-blender -b --factory-startup --python blender/export_park.py
-```
+- `src/`：遊戲程式（關卡 `level.js`、劇情與謎題 `game.js`、怪物 AI `monsters.js`）

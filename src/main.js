@@ -51,28 +51,28 @@ function skipTo(game, zone) {
     game.scene.remove(I.packPickup);
     I.doorL.rotation.y = 1.45; I.doorR.rotation.y = -1.45;
     game.physics.setEnabled(I.gateCollider, false);
-    game.checkpoint = { ...game.route.carousel.cp };
+    game.checkpoint = { x: 0, z: 37, yaw: 0 };
   }
   if (idx >= 2) {
     game.flags.fuses = 3; game.flags.fusesIn = 3;
-    I.jaw.position.y = -(I.jawDrop ?? 3.3);
+    I.jaw.position.y = -3.3;
     game.physics.setEnabled(I.jawCollider, false);
-    game.checkpoint = { ...game.route.funhouse.cp };
+    game.checkpoint = { x: 0, z: -2.5, yaw: 0 };
   }
   if (idx >= 3) {
     game.flags.keycard = true;
     I.fhDoor.getObjectByName('Door').rotation.y = 1.5;
     game.physics.setEnabled(I.fhDoorCollider, false);
-    game.checkpoint = { ...game.route.tunnel.cp };
+    game.checkpoint = { x: 0, z: -38.5, yaw: 0 };
   }
   if (idx >= 4) {
     I.tunDoor.getObjectByName('Door').rotation.y = 1.5;
     game.physics.setEnabled(I.tunDoorCollider, false);
-    game.checkpoint = { ...game.route.coaster.cp };
+    game.checkpoint = { x: 0, z: -72.5, yaw: 0 };
   }
   if (idx >= 5) {
     game.flags.chase = true; game.flags.bridgeDown = true;
-    game.checkpoint = { ...game.route.ferris.cp };
+    game.checkpoint = { x: 0, z: -146, yaw: 0 };
   }
   game.triggers.forEach((t) => { if (!t.repeatable) t.done = false; });
 }
