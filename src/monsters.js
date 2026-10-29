@@ -86,7 +86,49 @@ class Monster {
 }
 
 // ------------------------------------------------------------------------- bone horse
-/** Only moves while nobody is looking at it with a light. */
+const SHATTER_TIME = 5;   // seconds until a shattered horse has pulled itself back together
+const MEND_TIME = 1.2;    // the last part of it, when the pieces fly back
+let shardSet = null;      // the horse mesh cut into chunks, in horse-root space (shared by all horses)
+
+function horseShards(root) {
+  if (shardSet) return shardSet;
+  root.updateMatrixWorld(true);
+  const inv = root.matrixWorld.clone().invert();
+  const cells = new Map();
+  const C = 0.38;
+  root.traverse((o) => {
+    if (!o.isMesh) return;
+    const g = o.geometry.toNonIndexed();
+    g.applyMatrix4(new THREE.Matrix4().multiplyMatrices(inv, o.matrixWorld));
+    const pos = g.attributes.position, nor = g.attributes.normal, uv = g.attributes.uv;
+    for (let t = 0; t < pos.count; t += 3) {
+      const cx = (pos.getX(t) + pos.getX(t + 1) + pos.getX(t + 2)) / 3;
+      const cy = (pos.getY(t) + pos.getY(t + 1) + pos.getY(t + 2)) / 3;
+      const cz = (pos.getZ(t) + pos.getZ(t + 1) + pos.getZ(t + 2)) / 3;
+      const key = `${Math.floor(cx / C)},${Math.floor(cy / C)},${Math.floor(cz / C)}`;
+      let c = cells.get(key);
+      if (!c) cells.set(key, (c = { p: [], n: [], uv: [], mat: o.material }));
+      for (let k = t; k < t + 3; k++) {
+        c.p.push(pos.getX(k), pos.getY(k), pos.getZ(k));
+        if (nor) c.n.push(nor.getX(k), nor.getY(k), nor.getZ(k));
+        if (uv) c.uv.push(uv.getX(k), uv.getY(k));
+      }
+    }
+  });
+  shardSet = [...cells.values()].filter((c) => c.p.length >= 9 * 3).map((c) => {
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(c.p, 3));
+    if (c.n.length) g.setAttribute('normal', new THREE.Float32BufferAttribute(c.n, 3));
+    if (c.uv.length) g.setAttribute('uv', new THREE.Float32BufferAttribute(c.uv, 2));
+    g.computeBoundingBox();
+    const home = g.boundingBox.getCenter(new THREE.Vector3());
+    g.translate(-home.x, -home.y, -home.z);
+    return { geo: g, mat: c.mat, home };
+  });
+  return shardSet;
+}
+
+/** Only moves while nobody is looking at it with a light. A claw hit shatters it for a few seconds. */
 export class Horse extends Monster {
   constructor(game, x, z, rot) {
     super(game, 'horse', x, z, 0.55);
@@ -95,10 +137,88 @@ export class Horse extends Monster {
     this.stepT = 0;
     this.wasMoving = false;
     this.baseY = 0;
+    this.broken = 0;
+    this.shards = null;
+  }
+
+  /** Burst into pieces, flung away from `from` (the claw's hit point). */
+  shatter(from) {
+    if (this.broken > 0) return;
+    const set = horseShards(this.obj);
+    this.obj.updateMatrixWorld(true);
+    const m = this.obj.matrixWorld;
+    this.broken = SHATTER_TIME;
+    this.obj.visible = false;
+    this.path = null;
+    const rt = this.game.level.rayTargets, i = rt.indexOf(this.obj);
+    if (i >= 0) rt.splice(i, 1);
+    const q = new THREE.Quaternion().setFromRotationMatrix(m);
+    this.shards = set.map((s) => {
+      const mesh = new THREE.Mesh(s.geo, s.mat);
+      mesh.position.copy(s.home).applyMatrix4(m);
+      mesh.quaternion.copy(q);
+      this.game.scene.add(mesh);
+      const away = tmp.copy(mesh.position).sub(from).setY(0).normalize();
+      const vel = new THREE.Vector3(away.x * (2 + Math.random() * 3) + (Math.random() - 0.5) * 2, 2 + Math.random() * 3.5,
+        away.z * (2 + Math.random() * 3) + (Math.random() - 0.5) * 2);
+      const spin = new THREE.Vector3(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).multiplyScalar(14);
+      return { mesh, vel, spin, rest: null, from: null, fromQ: null };
+    });
+    audio.boneShatter(this.pos);
+    this.game.noiseAt(this.pos.x, this.pos.z, 18);
+  }
+
+  /** Put the horse back together at once (respawn / zone reset). */
+  mend() {
+    if (!this.shards) return;
+    for (const s of this.shards) s.mesh.removeFromParent();
+    this.shards = null;
+    this.broken = 0;
+    this.obj.visible = true;
+    const rt = this.game.level.rayTargets;
+    if (!rt.includes(this.obj)) rt.push(this.obj);
+  }
+
+  updateShards(dt) {
+    const prev = this.broken;
+    this.broken -= dt;
+    if (this.broken <= 0) { this.mend(); audio.creak(this.pos, 0.7); return; }
+    const set = horseShards(this.obj);
+    if (prev > MEND_TIME && this.broken <= MEND_TIME) {
+      audio.boneMend(this.pos);
+      this.obj.updateMatrixWorld(true);
+      this.shards.forEach((s) => { s.from = s.mesh.position.clone(); s.fromQ = s.mesh.quaternion.clone(); });
+    }
+    const m = this.obj.matrixWorld, q = new THREE.Quaternion().setFromRotationMatrix(m);
+    this.shards.forEach((s, i) => {
+      const mesh = s.mesh;
+      if (this.broken > MEND_TIME) {
+        // tumble and bounce on the ground
+        s.vel.y -= 14 * dt;
+        mesh.position.addScaledVector(s.vel, dt);
+        if (mesh.position.y < 0.08) {
+          mesh.position.y = 0.08;
+          s.vel.y *= -0.3; s.vel.x *= 0.6; s.vel.z *= 0.6; s.spin.multiplyScalar(0.6);
+        }
+        mesh.rotation.x += s.spin.x * dt; mesh.rotation.y += s.spin.y * dt; mesh.rotation.z += s.spin.z * dt;
+        // a twitch now and then, like it is trying to get up
+        if (Math.random() < dt * 0.6) { s.vel.y += 1.5; s.spin.set(Math.random() - 0.5, 0, Math.random() - 0.5).multiplyScalar(10); }
+      } else {
+        // pulled back into shape, the far pieces first
+        const k = 1 - this.broken / MEND_TIME;
+        const e = Math.min(1, Math.max(0, k * 1.4 - (i % 5) * 0.08));
+        const ease = e * e * (3 - 2 * e);
+        const target = tmp.copy(set[i].home).applyMatrix4(m);
+        mesh.position.lerpVectors(s.from, target, ease);
+        mesh.position.y += Math.sin(ease * Math.PI) * 0.6;
+        mesh.quaternion.slerpQuaternions(s.fromQ, q, ease);
+      }
+    });
   }
 
   update(dt) {
     super.update(dt);
+    if (this.broken > 0) { this.updateShards(dt); return; }
     if (!this.active) return;
     const g = this.game, p = g.player.pos;
     const head = tmp.set(this.pos.x, 1.6, this.pos.z);

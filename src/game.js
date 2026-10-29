@@ -136,7 +136,10 @@ export class Game {
     [...L.points.batteries2, ...L.points.batteries6].forEach((p) => this.addBattery(p));
     L.interact(I.fusebox, { label: '插入保險絲', use: () => this.insertFuses() });
     this.horses = L.points.horseHome.map(([x, z, r]) => new Horse(this, x, z, r));
-    this.horses.forEach((h) => (h.obj.position.y = 0.4));
+    this.horses.forEach((h) => {
+      h.obj.position.y = 0.4;
+      L.interact(h.obj, { kind: 'horse', horse: h, label: '' });
+    });
 
     // fun house
     const fp = L.points;
@@ -577,6 +580,10 @@ export class Game {
       case 'lever':
         this.pullLever();
         break;
+      case 'horse':
+        it.horse.shatter(point);
+        if (!this.flags.shatterHint) { this.flags.shatterHint = true; this.hud.hint('骨馬碎了！牠 5 秒後就會拼回來。', 4); }
+        break;
       default:
         audio.clank(point, 0.6);
         it.use?.();
@@ -677,7 +684,7 @@ export class Game {
     this.hud.fade(0, 1.2);
     // reset the zone's threats
     if (this.zone === 'carousel' && this.flags.horses && this.flags.fusesIn < 3) {
-      this.horses.forEach((h, i) => { const s = this.level.points.horseWake[i]; h.pos.set(s.x, 0, s.z); h.path = null; });
+      this.horses.forEach((h, i) => { const s = this.level.points.horseWake[i]; h.mend(); h.pos.set(s.x, 0, s.z); h.path = null; });
     }
     if (this.zone === 'funhouse') this.hornman.reset();
     if (this.zone === 'coaster' && !this.flags.bridgeDown) {

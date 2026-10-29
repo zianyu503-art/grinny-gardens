@@ -232,6 +232,28 @@ export class Audio {
     o.start(this.t); fm.start(this.t); o.stop(this.t + 1); fm.stop(this.t + 1);
   }
 
+  boneShatter(pos) { // dry splintering crack and rattling pieces
+    const ctx = this.ctx; const out = this.out(pos);
+    const n = this.noise(0.5); const bp = ctx.createBiquadFilter(); bp.type = 'bandpass';
+    bp.frequency.setValueAtTime(2600, this.t); bp.frequency.exponentialRampToValueAtTime(500, this.t + 0.35); bp.Q.value = 0.8;
+    n.connect(bp); this.env(bp, 0.001, 1.0, 0.35).connect(out);
+    for (let i = 0; i < 9; i++) {
+      const at = this.t + 0.12 + i * 0.07 + Math.random() * 0.06;
+      const o = ctx.createOscillator(); o.type = 'sine';
+      const f = 260 + Math.random() * 420;
+      o.frequency.setValueAtTime(f, at); o.frequency.exponentialRampToValueAtTime(f * 0.45, at + 0.05);
+      this.env(o, 0.001, 0.35 * (1 - i / 10), 0.07, at).connect(out); o.start(at); o.stop(at + 0.12);
+    }
+  }
+
+  boneMend(pos) { // pieces scraping back together
+    const ctx = this.ctx; const out = this.out(pos);
+    const n = this.noise(0.9); const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.Q.value = 2;
+    bp.frequency.setValueAtTime(400, this.t); bp.frequency.exponentialRampToValueAtTime(1800, this.t + 0.8);
+    n.connect(bp); this.env(bp, 0.3, 0.35, 0.5).connect(out);
+    this.creak(pos, 0.5);
+  }
+
   horseStep(pos) { // hollow wooden clop
     const ctx = this.ctx; const out = this.out(pos);
     const o = ctx.createOscillator(); o.type = 'sine';
