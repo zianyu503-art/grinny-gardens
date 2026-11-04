@@ -388,92 +388,58 @@ export class Audio {
 
   // ---------------------------------------------------------------- voice
   /**
-   * A muffled voice behind static: speech-like syllables (one per character) shaped by vowel
-   * formants, with no actual words — the subtitles carry those. `kind` is 'tape' (worn cassette:
-   * hiss, wow and flutter) or 'pa' (cracked loudspeaker echoing through an empty space).
-   * `pitch` 0.5 is a man's voice; higher is lighter. Starting a new line cuts off the previous one.
+   * Play a pre-recorded line (public/voice/<id>.m4a, made by tools/make_voices.mjs) through a
+   * medium: 'tape' (worn cassette: band-limited, saturated, wow and flutter, hiss) or 'pa'
+   * (cracked loudspeaker echoing off concrete). `rate` < 1 slows and deepens the voice.
+   * A new line cuts off the one playing. Resolves with the line's length in seconds.
    */
-  speak(text, { pitch = 0.5, rate = 0.85, volume = 1, kind = 'tape' } = {}) {
-    if (!this.ctx) return;
-    const ctx = this.ctx, t0 = this.t;
+  async voice(id, { kind = 'tape', rate = 1, volume = 1 } = {}) {
+    if (!this.ctx) return 0;
+    const ctx = this.ctx;
+    this.voices ||= {};
+    this.voices[id] ||= fetch(`${import.meta.env.BASE_URL}voice/${id}.m4a`)
+      .then((r) => r.arrayBuffer()).then((b) => ctx.decodeAudioData(b));
+    let buf;
+    try { buf = await this.voices[id]; } catch { return 0; }
+    const t0 = this.t;
     this.voiceStop?.(t0);
-    const syl = 0.15 * (0.85 / rate);
-    const chars = [...text.replace(/\s/g, '')];
-    const dur = chars.length * syl + 0.3;
-    const f0 = 210 * pitch;
-    const stops = [];
+    const dur = buf.duration / rate;
 
-    // output chain: band-limited, saturated, then the medium (tape or loudspeaker)
-    const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = kind === 'pa' ? 480 : 260;
-    const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = kind === 'pa' ? 2600 : 3200;
+    const src = ctx.createBufferSource(); src.buffer = buf; src.playbackRate.value = rate;
+    const wow = ctx.createOscillator(); wow.frequency.value = kind === 'tape' ? 0.8 : 6;
+    const wowG = ctx.createGain(); wowG.gain.value = rate * (kind === 'tape' ? 0.012 : 0.003);
+    wow.connect(wowG).connect(src.playbackRate);
+    const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = kind === 'pa' ? 420 : 220;
+    const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = kind === 'pa' ? 3000 : 3600;
+    const mid = ctx.createBiquadFilter(); mid.type = 'peaking'; mid.frequency.value = kind === 'pa' ? 1600 : 1100; mid.gain.value = 6;
+    const drive = ctx.createGain(); drive.gain.value = kind === 'pa' ? 0.9 : 0.45;
     const ws = ctx.createWaveShaper(); ws.curve = this.curve;
-    const drive = ctx.createGain(); drive.gain.value = kind === 'pa' ? 0.5 : 0.22;
-    const out = ctx.createGain(); out.gain.value = 0.55 * volume;
-    hp.connect(lp).connect(drive).connect(ws).connect(out).connect(this.sfx);
+    const out = ctx.createGain(); out.gain.value = 0.5 * volume;
+    src.connect(hp).connect(lp).connect(mid).connect(drive).connect(ws).connect(out).connect(this.sfx);
     if (kind === 'pa') { // slap-back echoes off concrete
-      for (const [dt, fb] of [[0.23, 0.32], [0.41, 0.22]]) {
+      for (const [dt, fb] of [[0.23, 0.35], [0.41, 0.25]]) {
         const d = ctx.createDelay(1); d.delayTime.value = dt;
         const g = ctx.createGain(); g.gain.value = fb;
-        const dl = ctx.createBiquadFilter(); dl.type = 'lowpass'; dl.frequency.value = 1500;
+        const dl = ctx.createBiquadFilter(); dl.type = 'lowpass'; dl.frequency.value = 1600;
         out.connect(d).connect(dl).connect(g).connect(d);
         g.connect(this.sfx);
       }
     }
-
-    // glottal source with wow/flutter (tape) or a little jitter (pa)
-    const src = ctx.createOscillator(); src.type = 'sawtooth';
-    const wow = ctx.createOscillator(); wow.frequency.value = kind === 'tape' ? 0.9 : 5.5;
-    const wowG = ctx.createGain(); wowG.gain.value = kind === 'tape' ? 22 : 6;
-    wow.connect(wowG).connect(src.detune);
-    const formants = [[0.9, 6], [0.45, 9], [0.18, 11]].map(([gain, q]) => {
-      const f = ctx.createBiquadFilter(); f.type = 'bandpass'; f.Q.value = q;
-      const g = ctx.createGain(); g.gain.value = gain;
-      src.connect(f).connect(g);
-      return { f, g };
-    });
-    const amp = ctx.createGain(); amp.gain.setValueAtTime(0.0001, t0);
-    formants.forEach(({ g }) => g.connect(amp));
-    amp.connect(hp);
-
-    const VOWELS = [[800, 1200, 2500], [300, 2250, 3000], [340, 870, 2250], [500, 1850, 2550], [480, 900, 2400], [650, 1700, 2600]];
-    const fric = ctx.createBiquadFilter(); fric.type = 'bandpass'; fric.frequency.value = 4200; fric.Q.value = 1.4;
-    const fricG = ctx.createGain(); fricG.gain.setValueAtTime(0.0001, t0);
-    const hiss = this.noise(dur + 0.4); hiss.connect(fric).connect(fricG).connect(hp);
-    stops.push(hiss);
-    let t = t0 + 0.12;
-    for (const ch of chars) {
-      if (/[，。、！？…,.!?；：—]/.test(ch)) { t += syl * 1.6; continue; }
-      const [a, b, c] = VOWELS[Math.floor(Math.random() * VOWELS.length)];
-      const tone = Math.random();
-      const fs = f0 * (0.9 + Math.random() * 0.2);
-      src.frequency.setValueAtTime(fs * (tone < 0.3 ? 0.88 : tone < 0.6 ? 1.12 : 1), t);
-      src.frequency.linearRampToValueAtTime(fs * (tone < 0.3 ? 1.12 : tone < 0.6 ? 0.86 : 0.97), t + syl * 0.9);
-      formants[0].f.frequency.setTargetAtTime(a, t, 0.02);
-      formants[1].f.frequency.setTargetAtTime(b, t, 0.02);
-      formants[2].f.frequency.setTargetAtTime(c, t, 0.02);
-      const peak = 0.5 + Math.random() * 0.4;
-      amp.gain.setTargetAtTime(peak, t + 0.01, 0.015);
-      amp.gain.setTargetAtTime(peak * 0.25, t + syl * 0.6, 0.02);
-      if (Math.random() < 0.45) { // consonant onset
-        fricG.gain.setTargetAtTime(0.25, t, 0.004);
-        fricG.gain.setTargetAtTime(0.0001, t + 0.035, 0.01);
-      }
-      t += syl;
-    }
-    amp.gain.setTargetAtTime(0.0001, t, 0.03);
-
-    // the medium's own noise under the voice
-    const bed = this.noise(t - t0 + 0.5);
+    // the medium's own noise under the voice, and a click as the tape starts
+    const bed = this.noise(dur + 0.6);
     const bedF = ctx.createBiquadFilter(); bedF.type = kind === 'tape' ? 'highpass' : 'bandpass'; bedF.frequency.value = kind === 'tape' ? 2500 : 900;
-    const bedG = ctx.createGain(); bedG.gain.setValueAtTime(0.0001, t0);
-    bedG.gain.exponentialRampToValueAtTime(kind === 'tape' ? 0.05 : 0.025, t0 + 0.08);
-    bedG.gain.setValueAtTime(kind === 'tape' ? 0.05 : 0.025, t + 0.2);
-    bedG.gain.exponentialRampToValueAtTime(0.0001, t + 0.45);
+    const bedG = ctx.createGain(); const lvl = kind === 'tape' ? 0.045 : 0.02;
+    bedG.gain.setValueAtTime(0.0001, t0);
+    bedG.gain.exponentialRampToValueAtTime(lvl, t0 + 0.05);
+    bedG.gain.setValueAtTime(lvl, t0 + dur + 0.25);
+    bedG.gain.exponentialRampToValueAtTime(0.0001, t0 + dur + 0.5);
     bed.connect(bedF).connect(bedG).connect(this.sfx);
-    stops.push(bed);
+    if (kind === 'tape') this.clank(null, 0.12);
 
-    for (const o of [src, wow]) { o.start(t0); o.stop(t + 0.5); stops.push(o); }
+    src.start(t0 + 0.15); wow.start(t0); wow.stop(t0 + dur + 0.6);
+    const stops = [src, wow, bed];
     this.voiceStop = (at) => { for (const s of stops) { try { s.stop(at); } catch { /* already stopped */ } } this.voiceStop = null; };
+    return dur + 0.15;
   }
 }
 

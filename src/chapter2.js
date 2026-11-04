@@ -5,7 +5,7 @@ import { audio } from './audio.js';
 import { Game } from './game.js';
 import { Level } from './level.js';
 import { Monster } from './monsters.js';
-import { INTRO2, PA2, TAPES2, NAME_TAG, ENDING2, VOICE_PITCH } from './story.js';
+import { INTRO2, PA2, TAPES2, NAME_TAG, ENDING2 } from './story.js';
 import { dust } from './atmosphere.js';
 
 const ZONE_FILES = ['zone_a_entry', 'zone_b_lockers', 'zone_c_sewing', 'zone_d_packing', 'zone_e_warehouse', 'zone_f_core'];
@@ -338,7 +338,7 @@ export class Chapter2 extends Game {
     this.updateInventory();
   }
 
-  pa2(key) { const t = PA2[key]; this.hud.say([{ who: '廣播', text: t, dur: 4.5 }]); audio.speak(t, { pitch: 0.55, rate: 0.8, kind: 'pa' }); }
+  pa2(key) { const t = PA2[key]; this.hud.say([{ who: '廣播', text: t, dur: 4.5 }]); audio.voice(`pa_${key}`, { kind: 'pa', rate: 0.88 }); }
 
   enterZone(name) {
     this.zone = name;
@@ -384,13 +384,7 @@ export class Chapter2 extends Game {
       this.level.rayTargets.splice(this.level.rayTargets.indexOf(o), 1);
       audio.pickup();
       this.flags.tapes++;
-      const tape = TAPES2[spec.tape];
-      this.hud.say([{ text: `▶ ${tape.title}`, dur: 2 }, ...tape.lines], true);
-      let t = 2;
-      for (const line of tape.lines) {
-        this.after(t, () => audio.speak(line.text.replace(/[（）()「」]/g, ''), { pitch: VOICE_PITCH[line.who] ?? 0.5 }));
-        t += line.text.length * 0.16;
-      }
+      this.playTape(spec.tape, TAPES2[spec.tape]);
       this.updateInventory();
       return;
     }

@@ -9,7 +9,7 @@ import { Player } from './player.js';
 import { ClawPack, findInteract } from './clawpack.js';
 import { HUD } from './hud.js';
 import { Horse, Hornman, Grinny, Statue } from './monsters.js';
-import { INTRO, PA, TAPES, ENDING, VOICE_PITCH } from './story.js';
+import { INTRO, PA, TAPES, ENDING, VOICE_RATE } from './story.js';
 import { polaroid, kidName, PHOTO_COUNT, dust } from './atmosphere.js';
 import { drawParkMap } from './map.js';
 
@@ -81,7 +81,7 @@ export class Game {
 
   // ------------------------------------------------------------------ helpers
   after(sec, fn) { this.timers.push({ t: this.time + sec, fn }); }
-  pa(key) { const t = PA[key]; this.hud.say([{ who: '廣播', text: t, dur: 4.5 }]); audio.speak(t, { pitch: 0.55, rate: 0.8, kind: 'pa' }); }
+  pa(key) { const t = PA[key]; this.hud.say([{ who: '廣播', text: t, dur: 4.5 }]); audio.voice(`pa_${key}`, { kind: 'pa', rate: 0.88 }); }
 
   inView(p, margin = 1) {
     v3.copy(p).project(this.camera);
@@ -211,6 +211,20 @@ export class Game {
     this.level.interact(b, { kind: 'pickup', label: '撿起 電池', item: 'battery' });
   }
 
+  /** Play a tape line by line; each subtitle appears as its recording starts. */
+  async playTape(id, tape) {
+    const token = (this.tapeToken = (this.tapeToken || 0) + 1);
+    this.hud.say([{ text: `▶ ${tape.title}`, dur: 1.6 }], true);
+    await new Promise((r) => setTimeout(r, 1600));
+    for (const [i, line] of tape.lines.entries()) {
+      if (token !== this.tapeToken || this.ended) return;
+      const dur = audio.voice(`tape_${id}_${i}`, { rate: VOICE_RATE[line.who] ?? 0.92 });
+      const d = (await dur) || line.text.length * 0.16;
+      this.hud.say([{ who: line.who, text: line.text, dur: d + 0.3 }], true);
+      await new Promise((r) => setTimeout(r, (d + 0.45) * 1000));
+    }
+  }
+
   addTape(p, id) {
     const t = this.level.add('cassette', p.x, p.z, { y: 0.02, rot: 0.7 });
     this.level.interact(t, { kind: 'pickup', label: '撿起 錄音帶', item: 'tape', tape: id });
@@ -326,15 +340,7 @@ export class Game {
       this.hud.objective('用鑰匙卡打開鬼屋後門');
     } else if (spec.item === 'tape') {
       this.flags.tapes++;
-      const tape = TAPES[spec.tape];
-      this.hud.say([{ text: `▶ ${tape.title}`, dur: 2 }, ...tape.lines], true);
-      const speakAll = (k) => {
-        if (k >= tape.lines.length) return;
-        audio.speak(tape.lines[k].text.replace(/[（）()「」]/g, ''), { pitch: VOICE_PITCH[tape.lines[k].who] ?? 0.5 });
-      };
-      this.after(2, () => speakAll(0));
-      this.after(2 + tape.lines[0].text.length * 0.16, () => speakAll(1));
-      this.after(2 + (tape.lines[0].text.length + tape.lines[1].text.length) * 0.16, () => speakAll(2));
+      this.playTape(spec.tape, TAPES[spec.tape]);
     }
     this.updateInventory();
   }
