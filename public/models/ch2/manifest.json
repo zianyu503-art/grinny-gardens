@@ -1,0 +1,157 @@
+{
+ "note": "Blender coordinates (metres, Z up, route along +Y). Three.js: (x, z, -y).",
+ "zones": [
+  {
+   "name": "zone_a_entry",
+   "glb": "zone_a_entry.glb",
+   "data": "zone_a_entry.json",
+   "x": [
+    -6,
+    6
+   ],
+   "y": [
+    0,
+    16
+   ],
+   "top": 4.3
+  },
+  {
+   "name": "zone_b_lockers",
+   "glb": "zone_b_lockers.glb",
+   "data": "zone_b_lockers.json",
+   "x": [
+    -10,
+    10
+   ],
+   "y": [
+    16,
+    34
+   ],
+   "top": 3.8
+  },
+  {
+   "name": "zone_c_sewing",
+   "glb": "zone_c_sewing.glb",
+   "data": "zone_c_sewing.json",
+   "x": [
+    -18,
+    18
+   ],
+   "y": [
+    34,
+    74
+   ],
+   "top": 7.3
+  },
+  {
+   "name": "zone_d_packing",
+   "glb": "zone_d_packing.glb",
+   "data": "zone_d_packing.json",
+   "x": [
+    -18,
+    18
+   ],
+   "y": [
+    74,
+    114
+   ],
+   "top": 6.3
+  },
+  {
+   "name": "zone_e_warehouse",
+   "glb": "zone_e_warehouse.glb",
+   "data": "zone_e_warehouse.json",
+   "x": [
+    -14,
+    14
+   ],
+   "y": [
+    114,
+    144
+   ],
+   "top": 8.3
+  },
+  {
+   "name": "zone_f_core",
+   "glb": "zone_f_core.glb",
+   "data": "zone_f_core.json",
+   "x": [
+    -12,
+    12
+   ],
+   "y": [
+    144,
+    170
+   ],
+   "top": 9.3
+  }
+ ],
+ "seams": {
+  "glb": "zone_seams.glb",
+  "colliders": [
+   [
+    -8.3,
+    16.15,
+    1.9,
+    4.0,
+    0.3,
+    3.8,
+    0.0
+   ],
+   [
+    8.3,
+    16.15,
+    1.9,
+    4.0,
+    0.3,
+    3.8,
+    0.0
+   ],
+   [
+    -14.3,
+    34.15,
+    3.65,
+    8.0,
+    0.3,
+    7.3,
+    0.0
+   ],
+   [
+    14.3,
+    34.15,
+    3.65,
+    8.0,
+    0.3,
+    7.3,
+    0.0
+   ],
+   [
+    0.0,
+    34.15,
+    5.55,
+    20.6,
+    0.3,
+    3.5,
+    0.0
+   ],
+   [
+    0.0,
+    114.15,
+    7.3,
+    28.6,
+    0.3,
+    2.0,
+    0.0
+   ],
+   [
+    0.0,
+    144.15,
+    8.8,
+    24.6,
+    0.3,
+    1.0,
+    0.0
+   ]
+  ]
+ }
+}
