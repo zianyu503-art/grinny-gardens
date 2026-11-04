@@ -4,7 +4,7 @@ import { audio } from './audio.js';
 
 const tmp = new THREE.Vector3();
 
-class Monster {
+export class Monster {
   constructor(game, model, x, z, radius = 0.5) {
     this.game = game;
     this.obj = spawn(model);

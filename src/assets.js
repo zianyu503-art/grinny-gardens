@@ -13,6 +13,18 @@ const MODELS = [
   'clawpack_full', 'clawhands',
 ];
 
+const CH2_ZONES = ['zone_a_entry', 'zone_b_lockers', 'zone_c_sewing', 'zone_d_packing', 'zone_e_warehouse', 'zone_f_core', 'zone_seams'];
+
+/** Chapter 2: the underground factory chunks plus the few props and creatures it needs. */
+export const CH2_MODELS = [
+  ...CH2_ZONES.map((z) => `ch2/${z}`),
+  'seamstress', 'giggler', 'joy_jar', 'name_tag',
+  'battery', 'cassette', 'lever', 'clawpack_full', 'clawhands',
+];
+
+// already authored dark and worn for the factory: keep their materials as they are
+const KEEP_MATERIALS = new Set([...CH2_ZONES.map((z) => `ch2/${z}`), 'seamstress', 'giggler', 'joy_jar', 'name_tag']);
+
 const cache = {};
 
 /**
@@ -36,7 +48,7 @@ function upgradeMaterial(mat) {
   mat.customProgramCacheKey = () => 'surf';
 }
 
-function prepare(root) {
+function prepare(root, keepMaterials = false) {
   root.traverse((o) => {
     if (!o.isMesh) return;
     o.castShadow = true;
@@ -45,7 +57,7 @@ function prepare(root) {
     // models authored with real PBR materials (no baked "Surf" colour) keep them untouched
     if (!g.attributes.color && !g.attributes.surf) {
       const m = o.material;
-      if (!m.userData.weathered) {
+      if (!m.userData.weathered && !keepMaterials) {
         // studio-clean product materials: tone down to sit in the grimy, flashlight-lit park
         m.userData.weathered = true;
         m.color.multiplyScalar(m.metalness > 0.6 ? 0.4 : 0.5);
@@ -64,16 +76,23 @@ function prepare(root) {
   });
 }
 
-export async function loadAll(onProgress) {
+export async function loadAll(onProgress, names = MODELS) {
   const loader = new GLTFLoader();
   let done = 0;
-  await Promise.all(MODELS.map(async (name) => {
+  await Promise.all(names.map(async (name) => {
     const gltf = await loader.loadAsync(`${import.meta.env.BASE_URL}models/${name}.glb`);
-    prepare(gltf.scene);
+    prepare(gltf.scene, KEEP_MATERIALS.has(name));
     cache[name] = gltf;
     done++;
-    onProgress?.(done / MODELS.length);
+    onProgress?.(done / names.length);
   }));
+}
+
+/** JSON data that ships next to the models (zone colliders, lights, markers). */
+export async function loadJSON(path) {
+  const r = await fetch(`${import.meta.env.BASE_URL}models/${path}`);
+  if (!r.ok) throw new Error(`${path}: ${r.status}`);
+  return r.json();
 }
 
 /** Fresh instance of a model. Materials are shared unless `uniqueMaterials` is set. */

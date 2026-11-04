@@ -1,4 +1,4 @@
-import { loadAll } from './assets.js';
+import { loadAll, CH2_MODELS } from './assets.js';
 import { audio } from './audio.js';
 import { isTouchDevice, setupTouch, touchText } from './touch.js';
 
@@ -6,8 +6,22 @@ const $ = (id) => document.getElementById(id);
 const startBtn = $('startBtn');
 
 async function boot() {
-  await loadAll((k) => { $('loadbar').firstElementChild.style.width = `${Math.round(k * 100)}%`; });
-  const { Game } = await import('./game.js');
+  const params = new URLSearchParams(location.search);
+  const chapter = params.get('ch') === '2' ? 2 : 1;
+  const progress = (k) => { $('loadbar').firstElementChild.style.width = `${Math.round(k * 100)}%`; };
+  let Game;
+  if (chapter === 2) {
+    $('title').querySelector('h2').textContent = '第二章　歡樂製造部';
+    $('title').querySelector('.vhs-tag').innerHTML = 'PLAY ▶ &nbsp; 1996.09.01 &nbsp; 00:41';
+    $('endTitle').textContent = '第二章　完';
+    const ch2 = await import('./chapter2.js');
+    await Promise.all([loadAll(progress, CH2_MODELS), ch2.loadChapter2()]);
+    Game = ch2.Chapter2;
+  } else {
+    await loadAll(progress);
+    ({ Game } = await import('./game.js'));
+  }
+  $('ch2Btn').onclick = () => { location.search = '?ch=2'; };
   const touch = isTouchDevice();
   if (touch) {
     document.body.classList.add('touch');
@@ -17,7 +31,7 @@ async function boot() {
   if (touch) { setupTouch(game); game.hud.filter = touchText; }
 
   // debug: ?zone=carousel|funhouse|tunnel|coaster|ferris jumps ahead with the needed progress
-  const zone = new URLSearchParams(location.search).get('zone');
+  const zone = chapter === 1 ? params.get('zone') : null;
   if (zone) skipTo(game, zone);
 
   startBtn.disabled = false;

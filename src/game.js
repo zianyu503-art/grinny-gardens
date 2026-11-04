@@ -9,7 +9,7 @@ import { Player } from './player.js';
 import { ClawPack, findInteract } from './clawpack.js';
 import { HUD } from './hud.js';
 import { Horse, Hornman, Grinny, Statue } from './monsters.js';
-import { INTRO, PA, TAPES, ENDING } from './story.js';
+import { INTRO, PA, TAPES, ENDING, VOICE_PITCH } from './story.js';
 import { polaroid, kidName, PHOTO_COUNT, dust } from './atmosphere.js';
 import { drawParkMap } from './map.js';
 
@@ -26,8 +26,7 @@ export class Game {
     this.input.touchMode = touch;
     this.physics = new Physics();
     this.hud = new HUD();
-    this.level = new Level(this.scene, this.physics);
-    this.level.build();
+    this.level = this.buildLevel();
     this.player = new Player(this.camera, this.scene);
     this.claw = new ClawPack(this.camera, this);
     this.time = 0;
@@ -82,7 +81,7 @@ export class Game {
 
   // ------------------------------------------------------------------ helpers
   after(sec, fn) { this.timers.push({ t: this.time + sec, fn }); }
-  pa(key) { const t = PA[key]; this.hud.say([{ who: '廣播', text: t, dur: 4.5 }]); audio.speak(t, { pitch: 0.45, rate: 0.8 }); }
+  pa(key) { const t = PA[key]; this.hud.say([{ who: '廣播', text: t, dur: 4.5 }]); audio.speak(t, { pitch: 0.55, rate: 0.8, kind: 'pa' }); }
 
   inView(p, margin = 1) {
     v3.copy(p).project(this.camera);
@@ -102,6 +101,12 @@ export class Game {
   noiseAt(x, z, radius) { this.hornman?.active && this.hornman.hear(x, z, radius); }
 
   // ------------------------------------------------------------------ world wiring
+  buildLevel() {
+    const level = new Level(this.scene, this.physics);
+    level.build();
+    return level;
+  }
+
   setupWorld() {
     const L = this.level, I = L.items;
     // entrance: claw pack, generator, receiver, statue
@@ -325,7 +330,7 @@ export class Game {
       this.hud.say([{ text: `▶ ${tape.title}`, dur: 2 }, ...tape.lines], true);
       const speakAll = (k) => {
         if (k >= tape.lines.length) return;
-        audio.speak(tape.lines[k].text.replace(/[（）()「」]/g, ''), { pitch: 0.5, rate: 0.85 });
+        audio.speak(tape.lines[k].text.replace(/[（）()「」]/g, ''), { pitch: VOICE_PITCH[tape.lines[k].who] ?? 0.5 });
       };
       this.after(2, () => speakAll(0));
       this.after(2 + tape.lines[0].text.length * 0.16, () => speakAll(1));
@@ -650,7 +655,7 @@ export class Game {
     monster.obj.rotation.set(0, Math.atan2(-f.x, -f.z), 0);
     monster.visible = true;
     monster.playOnce?.('Attack', 1.6);
-    const faceY = monster instanceof Horse ? 1.9 : monster instanceof Hornman ? 2.5 : 2.9;
+    const faceY = monster.faceY ?? (monster instanceof Horse ? 1.9 : monster instanceof Hornman ? 2.5 : 2.9);
     p.look(new THREE.Vector3(monster.pos.x, faceY, monster.pos.z), 14);
     p.flashOn = true;
     audio.scream(1);
@@ -682,7 +687,13 @@ export class Game {
     this.dying = false;
     this.grace = 2.5;
     this.hud.fade(0, 1.2);
-    // reset the zone's threats
+    this.resetZone();
+    this.input.lock();
+    this.paused = false;
+  }
+
+  /** Put the current zone's threats back where they start (after a respawn). */
+  resetZone() {
     if (this.zone === 'carousel' && this.flags.horses && this.flags.fusesIn < 3) {
       this.horses.forEach((h, i) => { const s = this.level.points.horseWake[i]; h.mend(); h.pos.set(s.x, 0, s.z); h.path = null; });
     }
@@ -697,8 +708,6 @@ export class Game {
       });
       this.triggers.find((t) => t.repeatable).done = false;
     }
-    this.input.lock();
-    this.paused = false;
   }
 
   // ------------------------------------------------------------------ tweening
@@ -747,24 +756,14 @@ export class Game {
       this.killer?.mixer?.update(dt);
     } else {
       this.grace = (this.grace || 0) - dt;
-      this.statue.update(dt);
-      if (this.grace <= 0) this.horses.forEach((h) => h.update(dt));
-      if (this.grace <= 0) this.hornman.update(dt);
-      this.grinny.update(dt);
-      this.windowFace.update(dt);
+      this.updateMonsters(dt);
     }
 
     // ambient motion
     for (const u of this.level.updaters) u(dt);
     this.dustUpdate(dt, p.pos);
     if (this.mapOpen) this.drawMap();
-    // carousel & wheel motion
-    const I = this.level.items;
-    I.teacupSpin.rotation.y += dt * 0.06;
-    if (this.flags.horses && this.flags.fusesIn < 3) I.carouselSpin.rotation.y += dt * 0.25;
-    if (this.wheelSpin) I.wheel.rotation.z += dt * this.wheelSpin;
-    for (const c of I.cabins) c.rotation.z = -I.wheel.rotation.z;
-    if (this.director.visible) this.director.scale.setScalar(2.4 * (1 + Math.sin(this.time * 2) * 0.02));
+    this.updateWorld(dt);
 
     // tunnel blackout after the window scare
     if (this.blackout > 0) {
@@ -774,12 +773,7 @@ export class Game {
     }
 
     // danger -> heartbeat, vignette, drone
-    let danger = 0;
-    const consider = (m, range) => { if (m.active || m.state === 'chase') danger = Math.max(danger, 1 - m.distTo(p.pos) / range); };
-    this.horses.forEach((h) => h.active && !h.frozen && consider(h, 14));
-    if (this.hornman.active) consider(this.hornman, 12);
-    if (this.grinny.state === 'chase') consider(this.grinny, 24);
-    danger = Math.max(0, Math.min(1, danger));
+    const danger = Math.max(0, Math.min(1, this.danger()));
     audio.update(dt, danger);
     audio.setDread(danger);
     this.r.u.pulse.value += ((danger > 0.3 ? Math.abs(Math.sin(this.time * 6)) * danger : 0) - this.r.u.pulse.value) * Math.min(1, dt * 8);
@@ -792,6 +786,35 @@ export class Game {
     this.hud.update(dt);
     this.updateLights(dt);
     audio.updateListener(this.camera);
+  }
+
+  updateMonsters(dt) {
+    this.statue.update(dt);
+    if (this.grace <= 0) this.horses.forEach((h) => h.update(dt));
+    if (this.grace <= 0) this.hornman.update(dt);
+    this.grinny.update(dt);
+    this.windowFace.update(dt);
+  }
+
+  /** Carousel and wheel motion. */
+  updateWorld(dt) {
+    const I = this.level.items;
+    I.teacupSpin.rotation.y += dt * 0.06;
+    if (this.flags.horses && this.flags.fusesIn < 3) I.carouselSpin.rotation.y += dt * 0.25;
+    if (this.wheelSpin) I.wheel.rotation.z += dt * this.wheelSpin;
+    for (const c of I.cabins) c.rotation.z = -I.wheel.rotation.z;
+    if (this.director.visible) this.director.scale.setScalar(2.4 * (1 + Math.sin(this.time * 2) * 0.02));
+  }
+
+  /** 0..1: how close the nearest active threat is. */
+  danger() {
+    const p = this.player.pos;
+    let danger = 0;
+    const consider = (m, range) => { if (m.active || m.state === 'chase') danger = Math.max(danger, 1 - m.distTo(p) / range); };
+    this.horses.forEach((h) => h.active && !h.frozen && consider(h, 14));
+    if (this.hornman.active) consider(this.hornman, 12);
+    if (this.grinny.state === 'chase') consider(this.grinny, 24);
+    return danger;
   }
 
   updateLights(dt) {
