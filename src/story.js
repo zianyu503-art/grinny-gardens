@@ -63,6 +63,12 @@ export const PA2 = {
   core: '永恆歡樂機，運轉中。請勿關機。請勿關機。',
 };
 
+/** The director, holding you up to his mask before he drops you down the freight shaft. */
+export const THROW = [
+  { who: '園長', text: '你答應過要回來陪他們玩的。', dur: 3.4, voice: 'throw_0' },
+  { who: '園長', text: '下面的孩子們……很想念你。', dur: 3.4, voice: 'throw_1' },
+];
+
 export const TAPES2 = {
   guard: {
     title: '錄音帶 #4：警衛室',

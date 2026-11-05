@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { spawn, setEmit } from './assets.js';
+import { spawn, setEmit, animator } from './assets.js';
 import { audio } from './audio.js';
 import { Renderer } from './render.js';
 import { Input } from './input.js';
@@ -14,6 +14,7 @@ import { polaroid, kidName, PHOTO_COUNT, dust } from './atmosphere.js';
 import { drawParkMap } from './map.js';
 
 const POOL = 7;
+const DIRECTOR_SCALE = 1.7; // the puppet is ~5 m; on the wheel he looms at ~8.5 m
 const v3 = new THREE.Vector3();
 const $ = (id) => document.getElementById(id);
 
@@ -187,8 +188,10 @@ export class Game {
     I.receivers2.forEach((rc, i) => L.interact(rc, { kind: 'receiver', label: '摩天輪電源接收器', powered: false,
       onPower: () => this.powerWheel() }));
     this.director = spawn('director');
-    this.director.position.set(0, -14, -177);
-    this.director.scale.setScalar(2.4);
+    this.director.position.set(0, 16, -177);
+    this.director.scale.setScalar(DIRECTOR_SCALE);
+    this.directorAnim = animator(this.director);
+    this.directorAnim.play('Idle', { fade: 0 });
     this.directorLight = this.level.light(0, 7, -170, { color: 0xff2010, intensity: 0, distance: 26, flicker: 0.15 });
     this.director.visible = false;
     this.scene.add(this.director);
@@ -529,7 +532,7 @@ export class Game {
       audio.rumble(new THREE.Vector3(0, 2, -192), 6, 1);
       audio.stinger(1);
       this.directorLight.intensity = 26;
-      this.anim(6, (k) => { d.position.y = -14 + k * 14; p.shake(0.4); });
+      this.anim(6, (k) => { d.position.y = 16 - k * 16; p.shake(0.4); }); // lowered on his cables from the hub
       p.look(new THREE.Vector3(0, 6, -177), 1.2);
     });
     this.after(11.5, () => {
@@ -538,6 +541,7 @@ export class Game {
       this.r.u.red.value = 0.8;
       this.r.u.warp.value = 2;
       p.shake(1.5);
+      this.directorAnim.play('Reach', { once: true, fade: 0.15 });
       const from = this.director.position.z, to = Math.min(p.pos.z - 4, -160);
       this.anim(0.6, (k) => { this.director.position.z = from + k * (to - from); });
     });
@@ -809,7 +813,10 @@ export class Game {
     if (this.flags.horses && this.flags.fusesIn < 3) I.carouselSpin.rotation.y += dt * 0.25;
     if (this.wheelSpin) I.wheel.rotation.z += dt * this.wheelSpin;
     for (const c of I.cabins) c.rotation.z = -I.wheel.rotation.z;
-    if (this.director.visible) this.director.scale.setScalar(2.4 * (1 + Math.sin(this.time * 2) * 0.02));
+    if (this.director.visible) {
+      this.directorAnim.mixer.update(dt);
+      this.director.scale.setScalar(DIRECTOR_SCALE * (1 + Math.sin(this.time * 2) * 0.02));
+    }
   }
 
   /** 0..1: how close the nearest active threat is. */

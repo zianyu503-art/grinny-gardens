@@ -1,11 +1,11 @@
 // Chapter 2: the toy factory under the park. Same game loop as Chapter 1 (Game), different world.
 import * as THREE from 'three';
-import { spawn, loadJSON } from './assets.js';
+import { spawn, loadJSON, animator } from './assets.js';
 import { audio } from './audio.js';
 import { Game } from './game.js';
 import { Level } from './level.js';
 import { Monster } from './monsters.js';
-import { INTRO2, PA2, TAPES2, NAME_TAG, ENDING2 } from './story.js';
+import { INTRO2, PA2, TAPES2, NAME_TAG, ENDING2, THROW } from './story.js';
 import { dust } from './atmosphere.js';
 
 const ZONE_FILES = ['zone_a_entry', 'zone_b_lockers', 'zone_c_sewing', 'zone_d_packing', 'zone_e_warehouse', 'zone_f_core'];
@@ -326,6 +326,69 @@ export class Chapter2 extends Game {
     this.started = true;
     this.paused = false;
     this.hud.show(true);
+    this.throwIntro(() => this.beginChapter());
+  }
+
+  /**
+   * Opening: in a black void behind the elevator shaft the director holds you up to his mask,
+   * talks, winds up and throws you down. You fall on your back watching him shrink above you,
+   * hit the bottom, and wake in the freight elevator.
+   */
+  throwIntro(done) {
+    const p = this.player, Z = 24; // empty space behind zone A's start wall
+    const d = spawn('director');
+    d.position.set(0, 0, Z - 1.2);
+    this.scene.add(d);
+    const anim = animator(d);
+    anim.play('Idle', { fade: 0 });
+    this.introUpdate = (dt) => anim.mixer.update(dt);
+    const face = new THREE.Vector3(0, 4.3, Z - 0.95);
+    const red = this.level.light(0.6, 5.8, Z + 0.8, { color: 0xff3a20, intensity: 3, distance: 9, flicker: 0.12 });
+    const cold = this.level.light(-1.5, 3, Z + 1.5, { color: 0x9ab0ff, intensity: 1.2, distance: 6, flicker: 0.02 });
+    this.cinematic = true;
+    p.frozen = true;
+    this.input.enabled = false;
+    this.claw.show(false);
+    p.place(0, Z + 0.15, 0);
+    p.pos.y = face.y - 1.6; // held up in his hand, level with the mask
+    p.look(face, 30);
+    this.hud.fade(0, 1.6);
+    audio.musicBox(new THREE.Vector3(0, 4, Z), 0.35);
+    let t = 1.6;
+    for (const line of THROW) {
+      this.after(t, () => { this.hud.say([line], true); audio.voice(line.voice, { kind: 'pa', rate: 0.82 }); });
+      t += line.dur + 0.3;
+    }
+    this.after(t, () => { anim.play('Throw', { once: true, fade: 0.1 }); audio.giggle(face, 0.8); p.shake(0.4); });
+    this.after(t + 0.9, () => {
+      audio.stinger(1);
+      p.shake(1.2);
+      const y0 = p.pos.y;
+      this.anim(2.4, (k) => {
+        p.pos.y = y0 - k * k * 45;
+        p.pos.z = Z + 0.15 + k * 1.5;
+        p.look(face, 6 + k * 20); // tumble back, staring up at him as he shrinks away
+      });
+    });
+    this.after(t + 3.3, () => {
+      this.hud.fade(1, 0.05);
+      audio.thud(p.pos, 1);
+      audio.clank(null, 0.9);
+      p.shake(2);
+    });
+    this.after(t + 4.6, () => {
+      this.scene.remove(d);
+      this.introUpdate = null;
+      red.intensity = 0; cold.intensity = 0;
+      p.frozen = false;
+      this.input.enabled = true;
+      this.claw.show(true);
+      this.cinematic = false;
+      done();
+    });
+  }
+
+  beginChapter() {
     this.player.place(this.checkpoint.x, this.checkpoint.z, this.checkpoint.yaw);
     this.player.surface = 'ground';
     audio.setIndoor(true);
@@ -457,7 +520,8 @@ export class Chapter2 extends Game {
     this.allGigglers().forEach((g) => g.update(dt));
   }
 
-  updateWorld() {
+  updateWorld(dt) {
+    this.introUpdate?.(dt);
     if (this.flags.leverDown) return;
     this.machineLight.intensity = 2 + Math.sin(this.time * 3) * 0.6;
   }

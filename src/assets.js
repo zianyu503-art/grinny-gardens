@@ -18,12 +18,12 @@ const CH2_ZONES = ['zone_a_entry', 'zone_b_lockers', 'zone_c_sewing', 'zone_d_pa
 /** Chapter 2: the underground factory chunks plus the few props and creatures it needs. */
 export const CH2_MODELS = [
   ...CH2_ZONES.map((z) => `ch2/${z}`),
-  'seamstress', 'giggler', 'joy_jar', 'name_tag',
+  'seamstress', 'giggler', 'joy_jar', 'name_tag', 'director',
   'battery', 'cassette', 'lever', 'clawpack_full', 'clawhands',
 ];
 
 // already authored dark and worn for the factory: keep their materials as they are
-const KEEP_MATERIALS = new Set([...CH2_ZONES.map((z) => `ch2/${z}`), 'seamstress', 'giggler', 'joy_jar', 'name_tag']);
+const KEEP_MATERIALS = new Set([...CH2_ZONES.map((z) => `ch2/${z}`), 'seamstress', 'giggler', 'joy_jar', 'name_tag', 'director']);
 
 const cache = {};
 
@@ -111,6 +111,25 @@ export function spawn(name, { uniqueMaterials = false } = {}) {
   }
   obj.userData.animations = gltf.animations;
   return obj;
+}
+
+/** Animation mixer for a spawned model; play(name, {once}) crossfades to one of its clips. */
+export function animator(obj) {
+  const mixer = new THREE.AnimationMixer(obj);
+  const acts = Object.fromEntries((obj.userData.animations || []).map((c) => [c.name, mixer.clipAction(c)]));
+  let current = null;
+  return {
+    mixer,
+    play(name, { once = false, fade = 0.3 } = {}) {
+      const a = acts[name];
+      if (!a) return;
+      a.reset().setLoop(once ? THREE.LoopOnce : THREE.LoopRepeat, Infinity);
+      a.clampWhenFinished = once;
+      a.fadeIn(fade).play();
+      if (current && current !== a) current.fadeOut(fade);
+      current = a;
+    },
+  };
 }
 
 export function part(obj, name) {
