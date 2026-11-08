@@ -86,10 +86,12 @@ export class Player {
     const stick = Math.min(1, Math.hypot(mx, mz));
     const moving = stick > 0.12;
     if (!moving) { mx = 0; mz = 0; }
+    // crouching only ends on a fresh Shift press (or C); a held Shift or a touch stick drifting to the
+    // rim while sneaking must not stand the player up
+    if (this.crouched && !this.frozen && (input.hit('ShiftLeft') || input.hit('ShiftRight'))) this.crouched = false;
     // touch: pushing the stick to the rim (forward) sprints
-    const wantSprint = input.down('ShiftLeft') || input.down('ShiftRight') || (input.axis.active && stick > 0.93);
+    const wantSprint = !this.crouched && (input.down('ShiftLeft') || input.down('ShiftRight') || (input.axis.active && stick > 0.93));
     const canSprint = wantSprint && moving && this.staminaLock <= 0 && mz <= 0;
-    if (canSprint) this.crouched = false;
     let speed = this.crouched ? 1.45 : canSprint ? 5.9 : 2.9;
     if (input.axis.active && !canSprint) speed *= Math.max(0.35, stick);
     if (canSprint) {
