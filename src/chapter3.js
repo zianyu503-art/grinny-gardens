@@ -41,6 +41,26 @@ export async function loadChapter3() {
   DATA = out;
 }
 
+/** Zones to load before the title screen: the hub, plus the zone a saved game resumes in. */
+export function firstZones() {
+  let z = 'hub';
+  try {
+    const saved = JSON.parse(localStorage.getItem(SAVE_KEY) || '{}');
+    if (!new URLSearchParams(location.search).get('new') && !saved.done && ZONES.includes(saved.zone)) z = saved.zone;
+  } catch { /* storage unavailable */ }
+  return [...new Set(['hub', z])];
+}
+
+/** Download the remaining zone chunks one at a time while the player is in the hub, and drop each in as it arrives. */
+export async function streamZones(game, loadAll) {
+  for (const name of ZONES) {
+    if (has(`ch3/zone_${name}`)) continue;
+    await loadAll(null, [`ch3/zone_${name}`], true);
+    game.level.attachZone(name);
+    game.zoneArrived(name);
+  }
+}
+
 /** glTF loading strips dots from node names ('hand.L' -> 'handL'), so match loosely. */
 function bones(obj, re) {
   const out = [];
@@ -126,9 +146,9 @@ class Level3 extends Level {
     for (const name of ZONES) {
       const g = new THREE.Group();
       g.name = `zone_${name}`;
-      if (has(`ch3/zone_${name}`)) g.add(spawn(`ch3/zone_${name}`));
       scene.add(g);
       this.groups[name] = g;
+      this.attachZone(name);
       const z = DATA[name];
       z.colliders.forEach(addBlock(name));
       for (const li of z.lights) {
@@ -138,6 +158,14 @@ class Level3 extends Level {
       this.points[name] = Object.fromEntries(Object.entries(z.markers).map(([k, [x, y, h]]) => [k, toWorld(x, y, h)]));
     }
     this.physics.rebuild();
+  }
+
+  /** Add a zone's scenery once its chunk has loaded (colliders, lights and markers come from the JSON up front). */
+  attachZone(name) {
+    const g = this.groups[name];
+    if (!g || g.userData.loaded || !has(`ch3/zone_${name}`)) return;
+    g.add(spawn(`ch3/zone_${name}`));
+    g.userData.loaded = true;
   }
 
   /** Colliders of a zone whose box is centred within `r` metres (Blender x, y) of a point. */
@@ -813,12 +841,12 @@ export class Chapter3 extends Game {
     for (let n = 1; n <= 3; n++) {
       const o = G.getObjectByName(`B_magnet_crate_${n}`);
       const p = P[`magnet_crate_${n}`];
-      if (!o || !p) continue;
+      if (!p) continue;
       const cols = L.colsNear('bumper', p.x, -p.z, 1.2, 3);
       const spec = { kind: 'magnet_crate', n, label: '' };
-      L.interact(o, spec);
+      if (o) L.interact(o, spec);
       cols.forEach((k) => { k.m.userData.interact = spec; });
-      this.crates[n] = { o, cols, p: p.clone() };
+      this.crates[n] = { o, cols, p: p.clone(), spec };
     }
   }
 
@@ -847,7 +875,7 @@ export class Chapter3 extends Game {
     c.gone = true;
     c.cols.forEach((k) => this.level.dropCol(k));
     this.physics.rebuild();
-    if (silent) { c.o.visible = false; return; }
+    if (silent || !c.o) { if (c.o) c.o.visible = false; if (!silent && !this.S.crates.includes(n)) { this.S.crates.push(n); this.save(); } return; }
     if (!this.S.crates.includes(n)) this.S.crates.push(n);
     this.save();
     const from = c.o.position.clone();
@@ -1538,6 +1566,39 @@ export class Chapter3 extends Game {
   }
 
   // ------------------------------------------------------------------ save restore
+  /**
+   * A zone chunk streamed in after setup: find its scripted parts again and bring them in line with
+   * the progress made so far (an open shutter stays open, broken walls stay gone).
+   */
+  zoneArrived(name) {
+    const L = this.level, G = L.groups[name];
+    if (name === 'bumper') {
+      G.getObjectByName('B_claw_magnet')?.removeFromParent();
+      this.shutter = G.getObjectByName('B_shutter');
+      if (this.gateOpen && this.shutter) this.shutter.position.y += 5;
+      for (const [n, c] of Object.entries(this.crates || {})) {
+        c.o = G.getObjectByName(`B_magnet_crate_${n}`);
+        if (!c.o) continue;
+        if (c.gone) c.o.visible = false;
+        else L.interact(c.o, c.spec);
+      }
+    } else if (name === 'mirror') {
+      for (const [n, sc] of Object.entries(this.secrets || {})) {
+        sc.door = G.getObjectByName(`U_secret_door_${n}`);
+        if (sc.found && sc.door) sc.door.visible = false;
+      }
+    } else if (name === 'radio') {
+      for (const [n, c] of Object.entries(this.cracks || {})) {
+        c.o = G.getObjectByName(`RAD_crack_${n}`);
+        if (!c.o) continue;
+        if (c.broken) c.o.visible = false;
+        else L.interact(c.o, { kind: 'crack', n: +n, label: '' });
+      }
+    } else if (name === 'power') {
+      this.finaleDoor = G.getObjectByName('PWR_finale_door');
+    }
+  }
+
   applySave() {
     const S = this.S;
     S.claws.forEach((c) => this.giveClaw(c, true));

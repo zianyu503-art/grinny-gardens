@@ -8,14 +8,19 @@ const startBtn = $('startBtn');
 async function boot() {
   const params = new URLSearchParams(location.search);
   const chapter = params.get('ch') === '3' ? 3 : params.get('ch') === '2' ? 2 : 1;
-  const progress = (k) => { $('loadbar').firstElementChild.style.width = `${Math.round(k * 100)}%`; };
-  let Game;
+  // files finish in a burst at the end, so also show the megabytes downloaded to make slow loads visibly move
+  const progress = (k, bytes = 0) => {
+    $('loadbar').firstElementChild.style.width = `${Math.round(k * 100)}%`;
+    if (bytes) startBtn.textContent = `載入中… ${(bytes / 1048576).toFixed(1)} MB`;
+  };
+  let Game, ch3 = null;
   if (chapter === 3) {
     $('title').querySelector('h2').textContent = '第三章　失物招領';
     $('title').querySelector('.vhs-tag').innerHTML = 'PLAY ▶ &nbsp; 1996.09.01 &nbsp; 02:13';
     $('endTitle').textContent = '第三章　未完';
-    const ch3 = await import('./chapter3.js');
-    await Promise.all([loadAll(progress, CH3_MODELS, true), ch3.loadChapter3()]);
+    ch3 = await import('./chapter3.js');
+    const first = ch3.firstZones().map((z) => `ch3/zone_${z}`);
+    await Promise.all([loadAll(progress, [...CH3_MODELS, ...first], true), ch3.loadChapter3()]);
     Game = ch3.Chapter3;
   } else if (chapter === 2) {
     $('title').querySelector('h2').textContent = '第二章　歡樂製造部';
@@ -36,6 +41,7 @@ async function boot() {
     $('title').querySelector('.controls').innerHTML = '左半邊：拖曳移動（推到底奔跑）· 右半邊：拖曳轉頭<br>按鈕：左爪／右爪、互動、蹲、燈、地圖　·　請橫放手機';
   }
   const game = (window.game = new Game($('game'), { touch }));
+  ch3?.streamZones(game, loadAll);
   if (touch) { setupTouch(game); game.hud.filter = touchText; }
 
   // debug: ?zone=carousel|funhouse|tunnel|coaster|ferris jumps ahead with the needed progress

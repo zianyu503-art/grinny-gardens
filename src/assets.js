@@ -25,9 +25,12 @@ export const CH2_MODELS = [
 const CH3_ZONES = ['zone_hub', 'zone_bumper', 'zone_tower', 'zone_mirror', 'zone_radio', 'zone_power'];
 export const CH3_CLAWS = ['scissors', 'magnet', 'grapple', 'flash', 'horn', 'charge'];
 
-/** Chapter 3: six zone chunks, the three new creatures, the six claws. Missing files are tolerated (see loadAll). */
+/**
+ * Chapter 3: the creatures and claws are needed up front; the six zone chunks (`ch3/zone_<name>`) are
+ * large, so only the zones the player starts in load before the title screen and the rest stream in
+ * while playing. Missing files are tolerated (see loadAll).
+ */
 export const CH3_MODELS = [
-  ...CH3_ZONES.map((z) => `ch3/${z}`),
   'ticket', 'shadow', 'flicker', 'giggler', 'director', 'name_tag', 'battery', 'cassette', 'clawhands', 'clawpack_full',
   ...CH3_CLAWS.map((c) => `claw_${c}`),
 ];
@@ -89,12 +92,18 @@ function prepare(root, keepMaterials = false) {
 export const missing = [];
 
 /** `optional`: a failed file is logged and skipped instead of failing the whole load (Chapter 3 assets arrive piecemeal). */
+/** Load models in parallel. onProgress(fraction of files done, bytes downloaded so far). */
 export async function loadAll(onProgress, names = MODELS, optional = false) {
   const loader = new GLTFLoader();
   let done = 0;
+  const bytes = {};
+  const total = () => Object.values(bytes).reduce((a, b) => a + b, 0);
   await Promise.all(names.map(async (name) => {
     try {
-      const gltf = await loader.loadAsync(`${import.meta.env.BASE_URL}models/${name}.glb`);
+      const gltf = await loader.loadAsync(`${import.meta.env.BASE_URL}models/${name}.glb`, (e) => {
+        bytes[name] = e.loaded;
+        onProgress?.(done / names.length, total());
+      });
       prepare(gltf.scene, KEEP_MATERIALS.has(name));
       cache[name] = gltf;
     } catch (e) {
@@ -103,7 +112,7 @@ export async function loadAll(onProgress, names = MODELS, optional = false) {
       console.warn('missing model', name);
     }
     done++;
-    onProgress?.(done / names.length);
+    onProgress?.(done / names.length, total());
   }));
 }
 
