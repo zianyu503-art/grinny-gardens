@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { spawn } from './assets.js';
+import { spawn, has } from './assets.js';
 import { audio } from './audio.js';
 
 const RANGE = 20, SPEED = 42;
@@ -29,9 +29,13 @@ export class ClawPack {
     ];
   }
 
-  makeHand(src, side, rest, glowColor) {
-    const head = new THREE.Group();
-    const body = src.getObjectByName('Hand' + side).clone();
+  /**
+   * Fill `head` with a hand body and its three jaws from a model. `side` is 'L' / 'R' for
+   * clawhands.glb (HandL, JawL0..2) or '' for the Chapter 3 claw_<id>.glb files (Hand, Jaw0..2, optional Glow).
+   */
+  fillHand(head, src, side) {
+    const handNode = src.getObjectByName('Hand' + side);
+    const body = handNode.clone();
     const origin = body.position.clone();
     body.position.set(0, 0, 0);
     head.add(body);
@@ -50,10 +54,23 @@ export class ClawPack {
       head.add(pivot);
       jaws.push(pivot);
     }
+    const g = src.getObjectByName('Glow');
+    let glowMesh = null;
+    if (g && !side) {
+      glowMesh = g.clone();
+      glowMesh.position.sub(origin);
+      head.add(glowMesh);
+    }
+    head.traverse((o) => { if (o.isMesh) { o.castShadow = false; o.receiveShadow = false; o.renderOrder = 10; } });
+    return { jaws, glowMesh, parts: [body, ...jaws, ...(glowMesh ? [glowMesh] : [])] };
+  }
+
+  makeHand(src, side, rest, glowColor) {
+    const head = new THREE.Group();
+    const { jaws, parts } = this.fillHand(head, src, side);
     head.scale.setScalar(HAND_SCALE);
     head.quaternion.copy(DOWN_TO_FORWARD);
     head.position.copy(rest);
-    head.traverse((o) => { if (o.isMesh) { o.castShadow = false; o.receiveShadow = false; o.renderOrder = 10; } });
     this.view.add(head);
 
     // rubber cable from behind the shoulder to the back of the hand
@@ -69,7 +86,24 @@ export class ClawPack {
     // at rest the claw leans in toward the crosshair and up, so its side and fingers read on screen
     const restDir = new THREE.Vector3(-rest.x * 2.2, 0.75, -1).normalize();
     return { head, rest, restDir, jaws, cable, anchor, glow, state: 'idle', t: 0, open: 0.15, target: new THREE.Vector3(),
-      hit: null, carry: null, charged: 0, hum: null, kick: 0, dir: restDir.clone() };
+      hit: null, carry: null, charged: 0, hum: null, kick: 0, dir: restDir.clone(), claw: null, parts, side, baseGlow: glowColor };
+  }
+
+  /**
+   * Chapter 3: swap what a hand carries. `id` is one of the claw_<id>.glb models, or null for the
+   * original claw. Falls back to the original model if the file is missing.
+   */
+  equip(i, id) {
+    const h = this.hands[i];
+    if (id && !has(`claw_${id}`)) id = null;
+    if (h.claw === id) return;
+    h.claw = id;
+    for (const p of h.parts) { h.head.remove(p); }
+    const src = id ? spawn(`claw_${id}`) : spawn('clawhands');
+    const side = id ? '' : h.side;
+    const r = this.fillHand(h.head, src, side);
+    h.jaws = r.jaws; h.parts = r.parts;
+    h.glow.color.set(id === 'charge' ? 0x6ab4ff : id === 'flash' ? 0xfff0c0 : h.baseGlow);
   }
 
   show(on) { this.enabled = on; this.view.visible = on; }

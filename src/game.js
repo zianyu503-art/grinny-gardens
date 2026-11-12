@@ -25,7 +25,7 @@ export class Game {
     this.camera = this.r.camera;
     this.input = new Input(canvas);
     this.input.touchMode = touch;
-    this.physics = new Physics();
+    this.physics = this.makePhysics();
     this.hud = new HUD();
     this.level = this.buildLevel();
     this.player = new Player(this.camera, this.scene);
@@ -79,6 +79,8 @@ export class Game {
     this.paused = false;
     $('pause').classList.add('hidden');
   }
+
+  makePhysics() { return new Physics(); }
 
   // ------------------------------------------------------------------ helpers
   after(sec, fn) { this.timers.push({ t: this.time + sec, fn }); }

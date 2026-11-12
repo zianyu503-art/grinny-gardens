@@ -1,4 +1,4 @@
-import { loadAll, CH2_MODELS } from './assets.js';
+import { loadAll, CH2_MODELS, CH3_MODELS } from './assets.js';
 import { audio } from './audio.js';
 import { isTouchDevice, setupTouch, touchText } from './touch.js';
 
@@ -7,10 +7,17 @@ const startBtn = $('startBtn');
 
 async function boot() {
   const params = new URLSearchParams(location.search);
-  const chapter = params.get('ch') === '2' ? 2 : 1;
+  const chapter = params.get('ch') === '3' ? 3 : params.get('ch') === '2' ? 2 : 1;
   const progress = (k) => { $('loadbar').firstElementChild.style.width = `${Math.round(k * 100)}%`; };
   let Game;
-  if (chapter === 2) {
+  if (chapter === 3) {
+    $('title').querySelector('h2').textContent = '第三章　失物招領';
+    $('title').querySelector('.vhs-tag').innerHTML = 'PLAY ▶ &nbsp; 1996.09.01 &nbsp; 02:13';
+    $('endTitle').textContent = '第三章　未完';
+    const ch3 = await import('./chapter3.js');
+    await Promise.all([loadAll(progress, CH3_MODELS, true), ch3.loadChapter3()]);
+    Game = ch3.Chapter3;
+  } else if (chapter === 2) {
     $('title').querySelector('h2').textContent = '第二章　歡樂製造部';
     $('title').querySelector('.vhs-tag').innerHTML = 'PLAY ▶ &nbsp; 1996.09.01 &nbsp; 00:41';
     $('endTitle').textContent = '第二章　完';
@@ -22,6 +29,7 @@ async function boot() {
     ({ Game } = await import('./game.js'));
   }
   $('ch2Btn').onclick = () => { location.search = '?ch=2'; };
+  $('ch3Btn').onclick = () => { location.search = '?ch=3'; };
   const touch = isTouchDevice();
   if (touch) {
     document.body.classList.add('touch');

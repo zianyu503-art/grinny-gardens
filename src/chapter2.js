@@ -192,7 +192,7 @@ class Seamstress extends Monster {
  * Small wind-up toys that wander and run at you once they see you. A flashlight beam makes them
  * stop and giggle for a moment; a claw hit knocks one over for a few seconds.
  */
-class Giggler extends Monster {
+export class Giggler extends Monster {
   constructor(game, home, patrol) {
     super(game, 'giggler', home.x, home.z, 0.3);
     this.home = home.clone();
@@ -507,6 +507,7 @@ export class Chapter2 extends Game {
     document.getElementById('endText').textContent = ENDING2 + (this.flags.tapes >= 2 ? '' : `\n\n（找到的錄音帶：${this.flags.tapes}/2）`);
     document.getElementById('ending').classList.remove('hidden');
     document.getElementById('ch2Btn')?.classList.add('hidden');
+    document.getElementById('ch3Btn')?.classList.remove('hidden');
     this.musicBox?.stop();
     audio.musicBox(null, 0.35);
   }

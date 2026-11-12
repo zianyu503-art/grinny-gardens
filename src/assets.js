@@ -22,8 +22,18 @@ export const CH2_MODELS = [
   'battery', 'cassette', 'lever', 'clawpack_full', 'clawhands',
 ];
 
+const CH3_ZONES = ['zone_hub', 'zone_bumper', 'zone_tower', 'zone_mirror', 'zone_radio', 'zone_power'];
+export const CH3_CLAWS = ['scissors', 'magnet', 'grapple', 'flash', 'horn', 'charge'];
+
+/** Chapter 3: six zone chunks, the three new creatures, the six claws. Missing files are tolerated (see loadAll). */
+export const CH3_MODELS = [
+  ...CH3_ZONES.map((z) => `ch3/${z}`),
+  'ticket', 'shadow', 'flicker', 'giggler', 'director', 'name_tag', 'battery', 'cassette', 'clawhands', 'clawpack_full',
+  ...CH3_CLAWS.map((c) => `claw_${c}`),
+];
+
 // already authored dark and worn for the factory: keep their materials as they are
-const KEEP_MATERIALS = new Set([...CH2_ZONES.map((z) => `ch2/${z}`), 'seamstress', 'giggler', 'joy_jar', 'name_tag', 'director']);
+const KEEP_MATERIALS = new Set([...CH3_ZONES.map((z) => `ch3/${z}`), 'ticket', 'shadow', 'flicker', ...CH3_CLAWS.map((c) => `claw_${c}`), ...CH2_ZONES.map((z) => `ch2/${z}`), 'seamstress', 'giggler', 'joy_jar', 'name_tag', 'director']);
 
 const cache = {};
 
@@ -76,13 +86,22 @@ function prepare(root, keepMaterials = false) {
   });
 }
 
-export async function loadAll(onProgress, names = MODELS) {
+export const missing = [];
+
+/** `optional`: a failed file is logged and skipped instead of failing the whole load (Chapter 3 assets arrive piecemeal). */
+export async function loadAll(onProgress, names = MODELS, optional = false) {
   const loader = new GLTFLoader();
   let done = 0;
   await Promise.all(names.map(async (name) => {
-    const gltf = await loader.loadAsync(`${import.meta.env.BASE_URL}models/${name}.glb`);
-    prepare(gltf.scene, KEEP_MATERIALS.has(name));
-    cache[name] = gltf;
+    try {
+      const gltf = await loader.loadAsync(`${import.meta.env.BASE_URL}models/${name}.glb`);
+      prepare(gltf.scene, KEEP_MATERIALS.has(name));
+      cache[name] = gltf;
+    } catch (e) {
+      if (!optional) throw e;
+      missing.push(name);
+      console.warn('missing model', name);
+    }
     done++;
     onProgress?.(done / names.length);
   }));
@@ -96,6 +115,8 @@ export async function loadJSON(path) {
 }
 
 /** Fresh instance of a model. Materials are shared unless `uniqueMaterials` is set. */
+export function has(name) { return !!cache[name]; }
+
 export function spawn(name, { uniqueMaterials = false } = {}) {
   const gltf = cache[name];
   if (!gltf) throw new Error('model not loaded: ' + name);
