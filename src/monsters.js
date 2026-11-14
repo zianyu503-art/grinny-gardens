@@ -30,6 +30,7 @@ export class Monster {
   play(name, fade = 0.3, timeScale = 1) {
     if (!this.actions) return;
     const a = this.actions[name];
+    if (!a) return; // not every model has every clip (Hornman has no Idle)
     a.timeScale = timeScale;
     if (this.current === a) return;
     a.reset().setEffectiveWeight(1).fadeIn(fade).play();
