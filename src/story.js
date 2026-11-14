@@ -94,7 +94,13 @@ export const NAME_TAG = [
   { who: '我', text: '背面用原子筆寫著：「對不起，我縫不回去了。」', dur: 4.5 },
 ];
 
-export const ENDING2 = '拉桿落下的那一刻，所有的罐子同時裂開。\n\n笑聲從工廠的每一個角落湧出來，\n像是一整個夏天的下午。\n\n縫線娘娘停下了剪刀。\n她低頭看著你，用阿梅的聲音說：\n「謝謝你。可是園長……還在摩天輪上面等你。」';
+/** Mei, through the Seamstress, after the jars break (Chapter 2 ending cutscene). */
+export const MEI_END = [
+  { who: '阿梅', text: '孩子們……可以回家了。', dur: 3.2, voice: 'mei_end_0' },
+  { who: '阿梅', text: '謝謝你。可是園長……還在摩天輪上面等你。', dur: 4.6, voice: 'mei_end_1' },
+];
+
+export const ENDING2 = '工廠安靜了下來。\n\n笑聲穿過天花板，飄向地面，\n飄向那座還亮著燈的摩天輪。\n\n你知道他在上面等你。';
 
 /** Playback rate per speaker for the recorded tape voices: slower is deeper. */
 export const VOICE_RATE = { 園長: 0.8, 我: 0.9, 警衛: 0.96 };

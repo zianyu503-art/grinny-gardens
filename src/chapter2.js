@@ -5,7 +5,7 @@ import { audio } from './audio.js';
 import { Game } from './game.js';
 import { Level } from './level.js';
 import { Monster } from './monsters.js';
-import { INTRO2, PA2, TAPES2, NAME_TAG, ENDING2, THROW } from './story.js';
+import { INTRO2, PA2, TAPES2, NAME_TAG, ENDING2, THROW, MEI_END } from './story.js';
 import { dust } from './atmosphere.js';
 
 const ZONE_FILES = ['zone_a_entry', 'zone_b_lockers', 'zone_c_sewing', 'zone_d_packing', 'zone_e_warehouse', 'zone_f_core'];
@@ -495,10 +495,91 @@ export class Chapter2 extends Game {
     p.look(new THREE.Vector3(m.x, 3, m.z), 1.5);
     audio.rumble(m, 4, 1);
     this.anim(3, (k) => { this.machineLight.intensity = 2 + k * 10; p.shake(0.3); });
-    this.after(3, () => { audio.stinger(1); this.r.u.warp.value = 1.5; });
-    this.after(3.6, () => { this.r.u.warp.value = 0; this.musicBox = audio.musicBox(new THREE.Vector3(m.x, 3, m.z), 0.8); });
-    this.after(6, () => this.hud.fade(1, 3));
-    this.after(9.5, () => this.showEnding());
+    this.after(3, () => { audio.stinger(1); this.r.u.warp.value = 1.5; p.shake(1); });
+    this.after(3.5, () => { this.r.u.warp.value = 0; this.musicBox = audio.musicBox(new THREE.Vector3(m.x, 3, m.z), 0.7); });
+    this.after(3.2, () => this.breakJars());
+    this.after(5.5, () => p.look(new THREE.Vector3(m.x, 7, m.z), 0.8)); // the laughter rises past the machine
+    // Mei comes down on her rail, stops in front of you, and speaks with her own voice
+    const f = p.forward;
+    const at = new THREE.Vector3(p.pos.x + f.x * 3.4, 0, p.pos.z + f.z * 3.4);
+    this.after(8, () => this.meiDescends(at));
+    let t = 11.8;
+    for (const line of MEI_END) {
+      this.after(t, () => { this.hud.say([line], true); audio.voice(line.voice, { rate: 0.95 }); });
+      t += line.dur + 0.5;
+    }
+    this.after(t + 0.5, () => {
+      const s = this.mei;
+      if (s) { const y0 = s.position.y; this.anim(4, (k) => { s.position.y = y0 + k * k * 9; }); }
+      audio.creak(at, 0.5);
+    });
+    this.after(t + 2.5, () => this.hud.fade(1, 3));
+    this.after(t + 6, () => this.showEnding());
+  }
+
+  /** Every jar on the shelves cracks in turn and lets out a little cloud of warm light that drifts up and away. */
+  breakJars() {
+    const jars = [];
+    this.scene.traverse((o) => { if (/^F_jar/.test(o.name)) jars.push(o); });
+    jars.sort(() => Math.random() - 0.5);
+    const N = 10, pos = new Float32Array(jars.length * N * 3), vel = [];
+    jars.forEach((j, i) => {
+      const w = j.getWorldPosition(new THREE.Vector3());
+      for (let k = 0; k < N; k++) {
+        const q = (i * N + k) * 3;
+        pos[q] = w.x; pos[q + 1] = -999; pos[q + 2] = w.z; // parked out of sight until its jar breaks
+        vel.push({ home: w, born: 0, phase: Math.random() * 6.28, spin: 0.6 + Math.random() * 1.4, rise: 0.8 + Math.random() * 1.2 });
+      }
+      this.after(i * (4 / jars.length) + Math.random() * 0.1, () => {
+        j.visible = false;
+        if (i % 2 === 0) audio.clank(w, 0.25);
+        if (i % 3 === 0) audio.giggle(w, 0.35);
+        for (let k = 0; k < N; k++) vel[i * N + k].born = this.time;
+      });
+    });
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    const dot = document.createElement('canvas');
+    dot.width = dot.height = 64;
+    const c = dot.getContext('2d'), grad = c.createRadialGradient(32, 32, 0, 32, 32, 32);
+    grad.addColorStop(0, 'rgba(255,240,200,1)'); grad.addColorStop(0.3, 'rgba(255,190,110,0.6)'); grad.addColorStop(1, 'rgba(255,150,60,0)');
+    c.fillStyle = grad; c.fillRect(0, 0, 64, 64);
+    const mat = new THREE.PointsMaterial({ size: 0.35, map: new THREE.CanvasTexture(dot), transparent: true, depthWrite: false,
+      blending: THREE.AdditiveBlending, sizeAttenuation: true });
+    const pts = new THREE.Points(geo, mat);
+    pts.frustumCulled = false;
+    this.scene.add(pts);
+    const glow = this.level.light(this.level.points.f.machine.x, 3, this.level.points.f.machine.z, { color: 0xffc070, intensity: 0, distance: 30, flicker: 0.05 });
+    this.jarFx = (dt) => {
+      glow.intensity = Math.min(8, glow.intensity + dt * 3);
+      vel.forEach((v, n) => {
+        if (!v.born) return;
+        const a = this.time - v.born, q = n * 3;
+        const r = 0.3 + a * 0.25;
+        pos[q] = v.home.x + Math.cos(v.phase + a * v.spin) * r;
+        pos[q + 1] = v.home.y + 0.3 + a * v.rise;
+        pos[q + 2] = v.home.z + Math.sin(v.phase + a * v.spin) * r;
+      });
+      geo.attributes.position.needsUpdate = true;
+    };
+  }
+
+  meiDescends(at) {
+    const s = (this.mei = spawn('seamstress'));
+    const box = new THREE.Box3().setFromObject(s);
+    const hang = 5.25 - box.max.y; // same height she rode her rail at in the sewing hall
+    s.position.set(at.x, hang + 9, at.z);
+    const p = this.player.pos;
+    s.rotation.y = Math.atan2(p.x - at.x, p.z - at.z);
+    this.scene.add(s);
+    const anim = animator(s);
+    anim.play('Glide', { fade: 0 });
+    this.meiUpdate = (dt) => anim.mixer.update(dt);
+    audio.creak(at, 0.7);
+    this.anim(3.2, (k) => { s.position.y = hang + 9 * (1 - k) * (1 - k); });
+    this.after(3.2, () => { anim.play('Idle', { fade: 0.8 }); audio.clank(at, 0.4); });
+    this.player.look(new THREE.Vector3(at.x, 3.3, at.z), 0.9);
+    this.mei.userData.light = this.level.light(at.x, 4.5, at.z + 0.5, { color: 0xffd8b0, intensity: 2.5, distance: 7, flicker: 0.02 });
   }
 
   showEnding() {
@@ -525,6 +606,8 @@ export class Chapter2 extends Game {
 
   updateWorld(dt) {
     this.introUpdate?.(dt);
+    this.jarFx?.(dt);
+    this.meiUpdate?.(dt);
     if (this.flags.leverDown) return;
     this.machineLight.intensity = 2 + Math.sin(this.time * 3) * 0.6;
   }
