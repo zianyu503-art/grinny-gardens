@@ -14,7 +14,34 @@ import { polaroid, kidName, PHOTO_COUNT, dust } from './atmosphere.js';
 import { drawParkMap } from './map.js';
 
 const POOL = 7;
-const DIRECTOR_SCALE = 1.7; // the puppet is ~5 m; on the wheel he looms at ~8.5 m
+const DIRECTOR_SCALE = 1.7;
+
+/**
+ * How each enemy kills you. dist: how close it stands; faceY: where the light lands;
+ * lift/back/grabRoll: what the grab does to the camera over grabTime seconds;
+ * then you fall: slide back, roll onto your side, and look up at it.
+ */
+const DEATH = {
+  default: { dist: 1.4, faceY: 2.4, attackSpeed: 1.4, grabTime: 0.5, hold: 0.35, lift: 0, back: 0, grabRoll: 0,
+    slide: 0.4, fallRoll: 1.25, keepY: false, after: 'Idle', sound: () => {} },
+  horse: { dist: 1.2, faceY: 1.9, back: 1.6, grabRoll: -0.25, grabTime: 0.35, slide: 2.0, fallRoll: -1.3,
+    sound: (g, m) => { for (let i = 0; i < 3; i++) g.after(i * 0.12, () => audio.horseStep(m.pos)); } },
+  hornman: { dist: 1.1, faceY: 2.5, lift: -0.5, grabTime: 0.7, hold: 0.5, grabRoll: 0.2, fallRoll: 1.0, slide: 0.2,
+    sound: (g, m) => { audio.horn(m.pos, 1); g.after(0.4, () => audio.horn(m.pos, 1)); } },
+  grinny: { dist: 1.5, faceY: 2.9, lift: 1.1, grabTime: 0.8, hold: 0.45, grabRoll: 0.15, slide: 0.9, fallRoll: 1.35,
+    sound: (g, m, face) => { audio.giggle(face, 1); audio.thud(m.pos, 1); } },
+  seamstress: { dist: 1.0, faceY: 3.0, keepY: true, lift: 1.5, grabTime: 0.9, hold: 0.4, grabRoll: -0.3, slide: 0.3, fallRoll: -1.4,
+    sound: (g, m, face) => { for (let i = 0; i < 4; i++) g.after(i * 0.18, () => audio.clank(face, 0.8)); } },
+  giggler: { dist: 0.75, faceY: 0.6, lift: -1.1, grabTime: 0.35, hold: 0.6, grabRoll: 0.9, slide: 0.1, fallRoll: 1.45,
+    sound: (g, m, face) => { for (let i = 0; i < 4; i++) g.after(i * 0.25, () => audio.giggle(face, 0.9)); } },
+  ticket: { dist: 1.3, faceY: 2.4, back: 2.2, grabTime: 0.3, hold: 0.25, grabRoll: 0.35, slide: 2.8, fallRoll: 1.4,
+    sound: (g, m, face) => { audio.clank(face, 1); g.after(0.08, () => audio.thud(m.pos, 1)); g.after(0.1, () => { g.r.u.warp.value = 3; }); } },
+  flicker: { dist: 1.2, faceY: 1.5, lift: 0.2, grabTime: 0.6, hold: 0.5, grabRoll: 0.1, slide: 0.5, fallRoll: 1.2,
+    sound: (g, m, face) => { audio.zap(face); g.after(0.2, () => audio.zap(face)); g.r.u.warp.value = 3.5; g.whiteout?.(0.5); } },
+  puppet: { dist: 1.8, faceY: 3.6, lift: 1.4, grabTime: 1.0, hold: 0.5, grabRoll: -0.2, slide: 1.2, fallRoll: -1.35,
+    sound: (g, m, face) => { audio.rumble(m.pos, 2, 1); audio.stinger(1); } },
+};
+const deathKind = (m) => (m instanceof Horse ? 'horse' : m instanceof Hornman ? 'hornman' : m instanceof Grinny ? 'grinny' : null); // the puppet is ~5 m; on the wheel he looms at ~8.5 m
 const v3 = new THREE.Vector3();
 const $ = (id) => document.getElementById(id);
 
@@ -659,27 +686,49 @@ export class Game {
     this.dying = true;
     this.killer = monster;
     if (this.mapOpen) this.toggleMap();
-    const p = this.player;
+    const p = this.player, dc = p.deathCam;
+    const st = { ...DEATH.default, ...(DEATH[monster.death] || DEATH[deathKind(monster)] || {}) };
     p.frozen = true;
     this.input.enabled = false;
+    this.claw.show(false);
     const f = p.forward;
-    monster.pos.set(p.pos.x + f.x * 1.4, 0, p.pos.z + f.z * 1.4);
+    monster.pos.set(p.pos.x + f.x * st.dist, monster.pos.y, p.pos.z + f.z * st.dist);
+    if (!st.keepY) monster.pos.y = 0;
     monster.obj.rotation.set(0, Math.atan2(-f.x, -f.z), 0);
     monster.visible = true;
-    monster.playOnce?.('Attack', 1.6);
-    const faceY = monster.faceY ?? (monster instanceof Horse ? 1.9 : monster instanceof Hornman ? 2.5 : 2.9);
-    p.look(new THREE.Vector3(monster.pos.x, faceY, monster.pos.z), 14);
+    monster.playOnce?.('Attack', st.attackSpeed);
+    const face = new THREE.Vector3(monster.pos.x, monster.faceY ?? st.faceY, monster.pos.z);
+    p.look(face, 16);
     p.flashOn = true;
-    audio.scream(1);
-    this.r.u.red.value = 0.6;
-    this.r.u.warp.value = 2;
-    p.shake(2);
     this.deathTip = tip;
-    this.after(1.3, () => {
-      this.hud.fade(1, 0.1);
-      this.r.u.red.value = 0; this.r.u.warp.value = 0;
+
+    // 1. the grab: a sting, the light swings onto its face
+    audio.stinger(0.9);
+    st.sound(this, monster, face);
+    this.r.u.red.value = 0.35;
+    this.r.u.warp.value = 1.6;
+    p.shake(1.6);
+    // 2. what it does to you (lifted, hurled back, dragged down)
+    this.anim(st.grabTime, (k) => { dc.lift = st.lift * k; dc.back = st.back * k; dc.roll = st.grabRoll * k; });
+    this.after(st.grabTime * 0.5, () => audio.scream(1));
+    // 3. you hit the floor and lie there on your side, looking up at it
+    const t1 = st.grabTime + st.hold;
+    this.after(t1, () => {
+      const l0 = dc.lift, b0 = dc.back, r0 = dc.roll;
+      const floor = -p.eye + 0.22;
+      this.anim(0.45, (k) => { dc.lift = l0 + (floor - l0) * k; dc.back = b0 + (st.slide - b0) * k; dc.roll = r0 + (st.fallRoll - r0) * k; });
+      this.after(0.4, () => { audio.thud(p.pos, 1); p.shake(1.2); this.r.u.warp.value = 0.6; });
+      p.look(face, 3);
     });
-    this.after(1.8, () => {
+    // the edges bleed red while the heartbeat gives out, then the tape snaps to black
+    this.after(t1 + 0.5, () => this.anim(1.4, (k) => { this.r.u.red.value = 0.35 + k * 0.55; this.r.u.grain.value = 0.08 + k * 0.25; }));
+    this.after(t1 + 0.7, () => monster.play?.(st.after, 0.4));
+    this.after(t1 + 1.9, () => { this.r.u.warp.value = 3; audio.clank(null, 0.5); });
+    this.after(t1 + 2.1, () => {
+      this.hud.fade(1, 0.08);
+      this.r.u.red.value = 0; this.r.u.warp.value = 0; this.r.u.grain.value = 0.06;
+    });
+    this.after(t1 + 2.6, () => {
       document.exitPointerLock?.();
       $('deadMsg').textContent = tip || '';
       $('dead').classList.remove('hidden');
@@ -693,6 +742,7 @@ export class Game {
     const p = this.player;
     p.place(cp.x, cp.z, cp.yaw);
     p.frozen = false;
+    this.claw.show(!!this.flags.pack);
     p.battery = Math.max(p.battery, 40);
     p.stamina = 100;
     this.input.enabled = true;

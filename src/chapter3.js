@@ -205,6 +205,7 @@ function enemyProxy(monster, w, h, spec, parent = monster.obj, y = h / 2) {
 class TicketMan extends Monster {
   constructor(game) {
     super(game, 'ticket', 0, 0, 0.55);
+    this.death = 'ticket';
     this.bones = bones(this.obj, /^plate_/).filter((o) => o.isBone || !o.isMesh);
     this.plates = this.bones.length || 3;
     this.maxPlates = this.plates;
@@ -370,6 +371,7 @@ class ShadowKid extends Monster {
 class Flicker extends Monster {
   constructor(game) {
     super(game, 'flicker', 0, 0, 0.5);
+    this.death = 'flicker';
     this.hp = 3;
     this.state = 'gone'; this.timer = 3; this.spots = [];
     this.faceY = 1.8;
@@ -484,6 +486,7 @@ class Flicker extends Monster {
 class DirectorPuppet extends Monster {
   constructor(game) {
     super(game, 'director', 0, 0, 0.8);
+    this.death = 'puppet';
     this.obj.scale.setScalar(0.95);
     this.faceY = 4;
     this.visible = false;

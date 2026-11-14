@@ -24,6 +24,7 @@ export class Player {
     this.shakeAmt = 0;
     this.frozen = false;
     this.lookTarget = null;
+    this.deathCam = { lift: 0, back: 0, roll: 0 }; // death sequences move the camera off the eye
     this.adrenaline = false;
     this.surface = 'ground';
 
@@ -44,6 +45,7 @@ export class Player {
     this.pos.set(x, 0, z);
     this.yaw = yaw; this.pitch = 0;
     this.lookTarget = null;
+    this.deathCam = { lift: 0, back: 0, roll: 0 };
     this.syncCamera(0);
   }
 
@@ -150,10 +152,12 @@ export class Player {
     const bobX = Math.cos(this.bob * 0.5) * 0.03 * Math.min(1, this.speed / 3);
     this.shakeAmt = Math.max(0, this.shakeAmt - dt * 1.5);
     const sh = this.shakeAmt;
+    const dc = this.deathCam;
+    const bx = Math.sin(this.yaw) * dc.back, bz = Math.cos(this.yaw) * dc.back; // pushed back, away from where we face
     this.camera.position.set(
-      this.pos.x + bobX + (Math.random() - 0.5) * sh * 0.1,
-      this.pos.y + this.eye + bobY + (Math.random() - 0.5) * sh * 0.1,
-      this.pos.z + (Math.random() - 0.5) * sh * 0.1);
-    this.camera.rotation.set(this.pitch + (Math.random() - 0.5) * sh * 0.03, this.yaw, (Math.random() - 0.5) * sh * 0.02);
+      this.pos.x + bobX + bx + (Math.random() - 0.5) * sh * 0.1,
+      this.pos.y + this.eye + dc.lift + bobY + (Math.random() - 0.5) * sh * 0.1,
+      this.pos.z + bz + (Math.random() - 0.5) * sh * 0.1);
+    this.camera.rotation.set(this.pitch + (Math.random() - 0.5) * sh * 0.03, this.yaw, dc.roll + (Math.random() - 0.5) * sh * 0.02);
   }
 }

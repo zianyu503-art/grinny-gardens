@@ -69,6 +69,7 @@ class Level2 extends Level {
 class Seamstress extends Monster {
   constructor(game, loop) {
     super(game, 'seamstress', loop[0].x, loop[0].z, 1.0);
+    this.death = 'seamstress';
     // hang the trolley on the rail: the model's top sits at the rail's bottom flange
     const box = new THREE.Box3().setFromObject(this.obj);
     this.hang = 5.25 - box.max.y;
@@ -195,6 +196,7 @@ class Seamstress extends Monster {
 export class Giggler extends Monster {
   constructor(game, home, patrol) {
     super(game, 'giggler', home.x, home.z, 0.3);
+    this.death = 'giggler';
     this.home = home.clone();
     this.patrol = patrol;
     this.wp = Math.floor(Math.random() * patrol.length);
